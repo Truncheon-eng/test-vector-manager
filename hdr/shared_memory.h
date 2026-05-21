@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include <sys/types.h>
 #include <sys/ipc.h>
@@ -20,6 +22,7 @@ bool get_shared_block(int * ptr_id, const char * filename, size_t size);
 char * attach_memory_block(const char *filename, size_t size);
 bool detach_memory_block(char * ptr);
 bool destroy_memory_block(const char * filename, size_t size);
+bool create_shm_file(int * fd, const char * filename);
 
 
 typedef struct {

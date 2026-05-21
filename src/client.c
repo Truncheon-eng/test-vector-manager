@@ -10,8 +10,11 @@ int main(int argc, char *argv[]) {
     }
     
     block * b = (block *) shm;
-
-    printf("Read: \"%s\"\n", b -> buf);
+    if (b -> read == false) {
+        printf("Read: \"%s\"\n", b -> buf);
+    } else {
+        printf("[!]: Nothing to read!\n");
+    }
     
     b -> read = true;
 
@@ -20,6 +23,6 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "[x]: detach_memory_block error!\n");
         return -1;
     }
-    
+
     return 0;
 }

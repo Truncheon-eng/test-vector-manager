@@ -1,17 +1,25 @@
 #include "../hdr/shared_memory.h"
 
+bool create_shm_file(int * fd, const char * filename) {
+    if ((*fd = open(FILENAME, O_CREAT | O_WRONLY, 0644)) == -1) {
+        fprintf(stderr, "[x]: %s\n", strerror(errno));
+        return false;
+    }
+    return true;
+}
+
 bool get_shared_block(int * ptr_id, const char * filename, size_t size) {
     key_t key;
 
     assert(ptr_id != NULL);
 
     if ((key = ftok(filename, 0)) == -1) {
-        fprintf(stderr, "%s\n", strerror(errno));
+        fprintf(stderr, "[x]: %s\n", strerror(errno));
         return false;
     }
 
     if ((*ptr_id = shmget(key, size, 0644 | IPC_CREAT)) == -1) {
-        fprintf(stderr, "%s\n", strerror(errno));
+        fprintf(stderr, "[x]: %s\n", strerror(errno));
         return false;
     }
 
@@ -29,7 +37,7 @@ char * attach_memory_block(const char *filename, size_t size) {
     }
 
     if ((result = (char *) shmat(id, NULL, 0)) == (char *)-1) {
-        fprintf(stderr, "%s\n", strerror(errno));
+        fprintf(stderr, "[x]: %s\n", strerror(errno));
         return NULL;
     }
 
@@ -40,7 +48,7 @@ bool detach_memory_block(char * ptr) {
     int result = shmdt(ptr);
 
     if (result == -1) {
-        fprintf(stderr, "%s\n", strerror(errno));
+        fprintf(stderr, "[x]: %s\n", strerror(errno));
         return false;
     }
 
@@ -58,7 +66,7 @@ bool destroy_memory_block(const char * filename, size_t size) {
     int result = shmctl(id, IPC_RMID, NULL);
 
     if (result == -1) {
-        fprintf(stderr, "%s\n", strerror(errno));
+        fprintf(stderr, "[x]: %s\n", strerror(errno));
         return false;
     }
 

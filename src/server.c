@@ -1,8 +1,17 @@
 #include "../hdr/shared_memory.h"
-#include <stdio.h>
-#include <unistd.h>
+
 
 int main(int argc, char *argv[]) {
+    int fd;
+    bool res = create_shm_file(&fd, FILENAME);
+
+    if (!res) {
+        fprintf(stderr, "[x]: create_shm_file error!\n");
+        return -1;
+    }
+
+    close(fd);
+
     char * shm = attach_memory_block(FILENAME, SIZE);
     
     if (shm == NULL) {
@@ -28,7 +37,7 @@ int main(int argc, char *argv[]) {
             sleep(SLEEP_SEC);
     }
 
-    bool res = detach_memory_block(shm);
+    res = detach_memory_block(shm);
     if (!res) {
         fprintf(stderr, "[x]: detach_memory_block error!\n");
         return -1;
