@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
@@ -15,11 +16,15 @@ bool get_shared_block(int * ptr_id, const char * filename, size_t size) {
 
     assert(ptr_id != NULL);
 
-    if ((key = ftok(filename, 0)) == -1)
+    if ((key = ftok(filename, 0)) == -1) {
+        fprintf(stderr, "%s\n", strerror(errno));
         return false;
+    }
 
-    if ((*ptr_id = shmget(key, size, 0644 | IPC_CREAT)) == -1)
+    if ((*ptr_id = shmget(key, size, 0644 | IPC_CREAT)) == -1) {
+        fprintf(stderr, "%s\n", strerror(errno));
         return false;
+    }
 
     return true;
 }
@@ -35,7 +40,7 @@ char * attach_memory_block(const char *filename, size_t size) {
     }
 
     if ((result = (char *) shmat(id, NULL, 0)) == (char *)-1) {
-        printf("[x]: shmat error!\n");
+        fprintf(stderr, "%s\n", strerror(errno));
         return NULL;
     }
 
@@ -43,7 +48,14 @@ char * attach_memory_block(const char *filename, size_t size) {
 }
 
 bool detach_memory_block(char * ptr) {
-    return (shmdt(ptr) != -1);
+    int result = shmdt(ptr);
+
+    if (result == -1) {
+        fprintf(stderr, "%s\n", strerror(errno));
+        return false;
+    }
+
+    return true;
 }
 
 bool destroy_memory_block(const char * filename, size_t size) {
@@ -54,7 +66,14 @@ bool destroy_memory_block(const char * filename, size_t size) {
         return false;
     }
 
-    return (shmctl(id, IPC_RMID, NULL) != -1);
+    int result = shmctl(id, IPC_RMID, NULL);
+
+    if (result == -1) {
+        fprintf(stderr, "%s\n", strerror(errno));
+        return false;
+    }
+    
+    return true;
 }
 
 int main(int argc, char *argv[]) {
