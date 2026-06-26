@@ -1,2 +1,5 @@
+a.c
+out/*
 bin/*
+uvm-verilator/*
 obj/*
