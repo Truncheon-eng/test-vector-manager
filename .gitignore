@@ -3,3 +3,5 @@ out/*
 bin/*
 uvm-verilator/*
 obj/*
+server_obj/*
+server.out

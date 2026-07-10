@@ -17,7 +17,16 @@ CPP_FILES = dpi_funcs.cpp
 TOP = test_dpi
 BIN = $(OUT_DIR)/V$(TOP)
 
-.PHONY: all uvm_download verilate build run clean
+SRC_DIR=./server
+SRC=$(wildcard $(SRC_DIR)/*.cpp)
+
+OBJ_DIR = ./server_obj
+OBJ = $(patsubst $(SRC_DIR)/%.cpp, $(OBJ_DIR)/%.o, $(SRC))
+GCC = g++
+EXE = server.out
+
+
+.PHONY: all uvm_download verilate build run clean server clean_server
 
 all: build
 
@@ -38,7 +47,7 @@ verilate: uvm_download $(SV_FILES) $(CPP_FILES)
 		--main \
 		-o V$(TOP)
 
-build: verilate
+build: verilate server
 	@$(MAKE) -C $(OUT_DIR) -f V$(TOP).mk -j$(shell nproc)
 
 run: build
@@ -46,6 +55,21 @@ run: build
 	@./$(BIN) +UVM_TESTNAME=my_test
 	@echo "--- Simulation Finished ---"
 
-clean:
+clean: clean_server
 	@rm -rf $(OUT_DIR)
 	@echo "Project cleaned"
+
+clean_server:
+	@if [ -d "$(OBJ_DIR)" ]; then rm -rf $(OBJ_DIR) ; fi
+	@if [ -f "$(EXE)" ]; then rm "$(EXE)" ; fi
+
+server: $(EXE)
+
+$(EXE): $(OBJ)
+	$(GCC) $^ -o $@
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
+	$(GCC) -c $< -o $@
+
+$(OBJ_DIR):
+	@mkdir $@
