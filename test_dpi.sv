@@ -77,7 +77,7 @@ module test_dpi;
             end
 
             `uvm_info("SV", "Reading array from shared memory", UVM_LOW)
-            result = read_array(fd, read_data_array, ARRAY_SIZE);
+            result = read_array(fd, read_data_array, `ARRAY_SIZE);
 
             if (result != 0) begin
                 `uvm_fatal("SV", "read_array() failed")
