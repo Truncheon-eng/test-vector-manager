@@ -13,3 +13,5 @@
 - `make run` (выполняет сборку)
 - `make verilate` (генерирует C++ файлы в директорию `out/`)
 - `make clean` (удаляет директорию `out/`; очищает проект)
+- `make server` (собирает все необходимые бинарные файлы для server-а)
+- `make clean_server` (удаляет директорию `server_obj` и файл `server.out`)
