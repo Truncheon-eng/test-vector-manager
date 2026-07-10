@@ -16,6 +16,12 @@ int main() {
         cout << "> ";
         cin >> choice;
 
+        if (!cin) {
+            cin.clear();
+            cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            continue;
+        }
+
         switch (choice) {
             case 0:
                 write_data(fd, ARR_SIZE);
