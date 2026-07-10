@@ -5,6 +5,7 @@
 ├── Makefile
 ├── test_dpi.sv
 ├── dpi_funcs.cpp
+├── server/
 └── uvm-verilator/
 ```
 
