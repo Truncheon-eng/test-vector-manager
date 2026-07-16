@@ -21,20 +21,22 @@
 
 #include <time.h>
 
+#include "RingBuffer.hpp"
+
 #define FILENAME "a.c"
 #define INFO "[i]:"
-#define SIZE 0x1000
-#define ARR_SIZE 8
+#define PAGE_SIZE 0x1000
 
 void print_menu(void);
 int shared_memory_open(void);
 int shared_memory_truncate(int fd, size_t size);
 int close_shared_memory_fd(int fd);
-int write_data(int fd, int size);
-int read_data(int fd, int size);
+int write_data(int fd, uint32_t value);
+int read_data(int fd);
 
 using std::cin;
 using std::cout;
 using std::endl;
+using RingBufferUint64 = RingBuffer<64, uint32_t>;
 
 #endif

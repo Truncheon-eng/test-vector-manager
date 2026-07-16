@@ -1,6 +1,14 @@
 #include "server.hpp"
 
 
+RingBufferUint64* get_ring_buffer(void * data_ptr) {
+    RingBufferUint64* result = static_cast<RingBufferUint64*>(data_ptr);
+    if (result -> magic != RingBufferUint64::magic_value) {
+        result = new (data_ptr) RingBufferUint64();
+    }
+    return result;
+}
+
 int shared_memory_open(void) {
     int fd = shm_open(FILENAME, O_CREAT | O_RDWR, 0666);
     return fd;
@@ -24,69 +32,77 @@ void print_menu(void) {
     return;
 }
 
-int write_data(int fd, int size) {
-    if (fd < 0 || size <= 0)
-        return EXIT_FAILURE;
+int write_data(int fd, uint32_t value) {
+    int result = EXIT_SUCCESS;
 
-    size_t fullsize = static_cast<size_t>(size) * sizeof(int);
+    if (fd < 0)
+        return EXIT_FAILURE;
 
     void* data_ptr = mmap(
         nullptr,
-        fullsize,
+        PAGE_SIZE,
         PROT_READ | PROT_WRITE,
         MAP_SHARED,
         fd,
         0
     );
 
+    RingBufferUint64* ring_buf_p = get_ring_buffer(data_ptr);
+
     cout << "\n";
-
-    int * array = static_cast<int *>(data_ptr);
-    srand(time(0));
-
-    for(int i = 0; i < size; i++) {
-        array[i] = rand();
-        cout << INFO << " " << "\"write_data\" - " << "data[" << i << "] = ";        
-        cout << "0x" << std::hex << std::uppercase << array[i] << "\n";
+    if (!(ring_buf_p -> write_data(value))) {
+        cout << INFO << " Sucessfully wrote value \"0x" << 
+            std::hex << std::uppercase << value << "\"" << endl;
+    } else {
+        cout << INFO << " Ring buffer is filled" << endl;
+        result = EXIT_FAILURE;
     }
 
-    if(msync(data_ptr, fullsize, MS_SYNC) != 0) {
-        munmap(data_ptr, fullsize);
+    if(msync(data_ptr, PAGE_SIZE, MS_SYNC) != 0) {
+        munmap(data_ptr, PAGE_SIZE);
         return EXIT_FAILURE;
     }
 
-    if (munmap(data_ptr, fullsize) != 0)
+    if (munmap(data_ptr, PAGE_SIZE) != 0)
         return EXIT_FAILURE;
 
-    return EXIT_SUCCESS;
+    return result;
 }
 
-int read_data(int fd, int size) {
-    if (fd < 0 || size <= 0)
-        return EXIT_FAILURE;
+int read_data(int fd) {
+    int result = EXIT_SUCCESS;
 
-    size_t fullsize = static_cast<size_t>(size) * sizeof(int);
+    if (fd < 0)
+        return EXIT_FAILURE;
 
     void* data_ptr = mmap(
         nullptr,
-        fullsize,
+        PAGE_SIZE,
         PROT_READ | PROT_WRITE,
         MAP_SHARED,
         fd,
         0
     );
 
+    RingBufferUint64* ring_buf_p = get_ring_buffer(data_ptr);
+
     cout << "\n";
-
-    int * array = static_cast<int *>(data_ptr);
-
-    for(int i = 0; i < size; i++) {
-        cout << INFO << " " << "\"read_data\" - " << "data[" << i << "] = ";        
-        cout << "0x" << std::hex << std::uppercase << array[i] << "\n";
+    uint32_t data;
+    if (!(ring_buf_p -> read_data(data))) {
+        cout << INFO << " Successfully read value \"0x"
+            << std::hex << std::uppercase << data << "\"" << endl; 
+    } else {
+        cout << INFO << " Ring buffer is empty" << endl;
+        result = EXIT_FAILURE;
     }
 
-    if (munmap(data_ptr, fullsize) != 0)
+    if(msync(data_ptr, PAGE_SIZE, MS_SYNC) != 0) {
+        munmap(data_ptr, PAGE_SIZE);
+        return EXIT_FAILURE;
+    }
+
+    if (munmap(data_ptr, PAGE_SIZE) != 0)
         return EXIT_FAILURE;
 
-    return EXIT_SUCCESS;
+    return result;
 }
