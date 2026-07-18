@@ -26,6 +26,11 @@ void print_menu(void) {
 }
 
 RingBufferUint64* get_ring_buffer(void* data_ptr) {
+    /*
+        Если содержимое по указатель data_ptr не было инициализировано, то
+        происходит инициализация посредством вызова коснтруктора RingBufferUint64.
+        В противном случае происходит приведение указателя к RingBufferUint64*.
+    */
     RingBufferUint64* result = static_cast<RingBufferUint64*>(data_ptr);
 
     if (result->magic != RingBufferUint64::magic_value) {
@@ -41,7 +46,7 @@ int write_data(int fd, uint32_t value) {
     }
 
     constexpr size_t mapping_size = sizeof(RingBufferUint64);
-
+    // получение указателя на разделяемую память
     void* data_ptr = mmap(
         nullptr,
         mapping_size,
@@ -57,6 +62,9 @@ int write_data(int fd, uint32_t value) {
     }
 
     RingBufferUint64* ring_buffer = get_ring_buffer(data_ptr);
+    // запись данных в кольцевой буфер
+    // если запись проходит успешно, то возвращается 0 -> buffer_full == false
+    // в противном случае возврашщается -1 -> buffer_full = true
     bool buffer_full = ring_buffer->write_data(value);
     int result;
 
@@ -68,11 +76,13 @@ int write_data(int fd, uint32_t value) {
         result = DPI_SUCCESS;
     }
 
+    // все изменения в оперативной памяти выносим на диск
     if (msync(data_ptr, mapping_size, MS_SYNC) != 0) {
         perror("msync");
         result = DPI_ERROR;
     }
 
+    // unmap от разделямой памяти; аналог close с файловыми дескрипторами
     if (munmap(data_ptr, mapping_size) != 0) {
         perror("munmap");
         result = DPI_ERROR;
@@ -88,6 +98,7 @@ int read_data(int fd, uint32_t* value) {
 
     constexpr size_t mapping_size = sizeof(RingBufferUint64);
 
+    // получаем указтаель на разделяемую память
     void* data_ptr = mmap(
         nullptr,
         mapping_size,
@@ -103,6 +114,9 @@ int read_data(int fd, uint32_t* value) {
     }
 
     RingBufferUint64* ring_buffer = get_ring_buffer(data_ptr);
+    // чтение данных из кольцевого буфера
+    // если чтение проходит успешно, то возвращается 0 -> buffer_empty == false
+    // в противном случае возвращается -1 -> buffer_empty = true
     bool buffer_empty = ring_buffer->read_data(*value);
     int result;
 
