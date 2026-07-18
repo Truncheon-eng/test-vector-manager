@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <svdpi.h>
 #include <stdio.h>
-
+#include <new>
 
 #include <assert.h>
 #include <stdio.h>
@@ -17,25 +17,26 @@
 #include <sys/shm.h>
 #include <sys/mman.h>
 
+#include "server/RingBuffer.hpp"
 
 #define FILENAME "a.c"
-#define SIZE 4096
+#define SIZE 0x1000
 #define BUF_SIZE 128
 #define SLEEP_SEC 3
 
+using RingBufferUint64 = RingBuffer<64, uint32_t>;
 
-// Описываем структуру так же, как в SV т.е. packed
-typedef struct {
-    int a;
-    int b;
-} my_struct_t;
+enum DpiResult {
+    DPI_SUCCESS      = 0,
+    DPI_ERROR        = 1,
+    DPI_BUFFER_EMPTY = 2,
+    DPI_BUFFER_FULL  = 3
+};
 
 extern "C" {
     int shared_memory_open(void) {
-        int fd = shm_open(FILENAME, O_CREAT | O_RDWR, 0666);
-        return fd;
+        return shm_open(FILENAME, O_CREAT | O_RDWR, 0666);
     }
-    
 
     int shared_memory_truncate(int fd, size_t size) {
         return ftruncate(fd, size);
@@ -45,145 +46,144 @@ extern "C" {
         return close(fd);
     }
 
-    int write_data(int fd, int write_data) {
-        if (fd < 0)
-            return EXIT_FAILURE;
+    size_t get_ring_buffer_size(void) {
+        return sizeof(RingBufferUint64);
+    }
 
-        void * data_ptr = mmap(
-            NULL,
-            sizeof(int),
-            PROT_READ | PROT_WRITE,
-            MAP_SHARED,
-            fd,
-            0
-        );
+    RingBufferUint64* get_ring_buffer(void* data_ptr) {
+        RingBufferUint64* result = static_cast<RingBufferUint64*>(data_ptr);
 
-        if (data_ptr == MAP_FAILED)
-            return EXIT_FAILURE;
-
-        *(static_cast<int *>(data_ptr)) = write_data;
-
-        if(msync(data_ptr, sizeof(int), MS_SYNC) != 0) {
-            munmap(data_ptr, sizeof(int));
-            return EXIT_FAILURE;
+        if (result->magic != RingBufferUint64::magic_value) {
+            result = new (data_ptr) RingBufferUint64();
         }
-        
-        if(munmap(data_ptr, sizeof(int)) != 0)
-            return EXIT_FAILURE;
-        
-        printf("[C++]: Successfully wrote data \"0x%x\" to \"%p\"!\n",
-            write_data, data_ptr);
-        
-        return EXIT_SUCCESS;
+
+        return result;
     }
 
-    int read_data(int fd, int * read_data) {
-        if (fd < 0)
-            return EXIT_FAILURE;
+    int write_data(int fd, uint32_t value) {
+        if (fd < 0) {
+            return DPI_ERROR;
+        }
 
-        void * data_ptr = mmap(
-            NULL,
-            sizeof(int),
-            PROT_READ | PROT_WRITE,
-            MAP_SHARED,
-            fd,
-            0
-        );
+        constexpr size_t mapping_size = sizeof(RingBufferUint64);
 
-        if (data_ptr == MAP_FAILED)
-            return EXIT_FAILURE;
-
-        *read_data = *(static_cast<int *>(data_ptr));
-
-        if(munmap(data_ptr, sizeof(int)) != 0)
-            return EXIT_FAILURE;
-
-        printf("[C++]: Successfully read data \"0x%x\" from \"%p\"!\n",
-            *read_data, data_ptr);
-
-        return EXIT_SUCCESS;
-    }
-
-    int write_array(int fd, const svOpenArrayHandle data, int size) {
-        if (fd < 0 || data == nullptr || size <= 0)
-            return EXIT_FAILURE;
-
-        size_t full_size = static_cast<std::size_t>(size) * sizeof(int);
-
-        void * data_ptr = mmap(
+        void* data_ptr = mmap(
             nullptr,
-            full_size,
+            mapping_size,
             PROT_READ | PROT_WRITE,
             MAP_SHARED,
             fd,
             0
         );
 
-        if (data_ptr == MAP_FAILED)
-            return EXIT_FAILURE;
-
-        int* array = static_cast<int *>(data_ptr);
-        for (int i = 0; i < size; i++){
-            int* source_element = static_cast<int *>(svGetArrElemPtr1(data, i));
-            if (source_element == nullptr) {
-                munmap(data_ptr, full_size);
-                return EXIT_FAILURE;
-            }
-
-            array[i] = *source_element;
-            printf("[C++]: array[%d] = 0x%x\n", i, *source_element);
+        if (data_ptr == MAP_FAILED) {
+            perror("mmap");
+            return DPI_ERROR;
         }
 
-        if (msync(data_ptr, full_size, MS_SYNC) != 0) {
-            munmap(data_ptr, full_size);
-            return EXIT_FAILURE;
+        RingBufferUint64* ring_buffer = get_ring_buffer(data_ptr);
+        bool buffer_full = ring_buffer->write_data(value);
+        int result;
+
+        if (buffer_full) {
+            printf("[C++]: buffer is full\n");
+            result = DPI_BUFFER_FULL;
+        } else {
+            printf("[C++]: successfully wrote 0x%08x\n", value);
+            result = DPI_SUCCESS;
         }
 
-        if (munmap(data_ptr, full_size) != 0) {
-            return EXIT_FAILURE;
+        if (msync(data_ptr, mapping_size, MS_SYNC) != 0) {
+            perror("msync");
+            result = DPI_ERROR;
         }
 
-        return EXIT_SUCCESS;
+        if (munmap(data_ptr, mapping_size) != 0) {
+            perror("munmap");
+            result = DPI_ERROR;
+        }
+
+        return result;
     }
 
-    int read_array(int fd, const svOpenArrayHandle data, int size) {
-        if (fd < 0 || data == nullptr || size <= 0)
-            return EXIT_FAILURE;
+    int read_data(int fd, uint32_t* value) {
+        if (fd < 0 || value == nullptr) {
+            return DPI_ERROR;
+        }
 
-        size_t full_size = static_cast<std::size_t>(size) * sizeof(int);
+        constexpr size_t mapping_size = sizeof(RingBufferUint64);
 
-        void * data_ptr = mmap(
+        void* data_ptr = mmap(
             nullptr,
-            full_size,
+            mapping_size,
             PROT_READ | PROT_WRITE,
             MAP_SHARED,
             fd,
             0
         );
 
-        if (data_ptr == MAP_FAILED)
-            return EXIT_FAILURE;
-
-        int* array = static_cast<int *>(data_ptr);
-        for (int i = 0; i < size; i++){
-            int* destination_element = static_cast<int *>(svGetArrElemPtr1(data, i));
-            if (destination_element == nullptr) {
-                munmap(data_ptr, full_size);
-                return EXIT_FAILURE;
-            }
-            *destination_element = array[i];
-            printf("[C++]: array[%d] = 0x%x\n", i, *destination_element);
+        if (data_ptr == MAP_FAILED) {
+            perror("mmap");
+            return DPI_ERROR;
         }
 
-        if (msync(data_ptr, full_size, MS_SYNC) != 0) {
-            munmap(data_ptr, full_size);
-            return EXIT_FAILURE;
+        RingBufferUint64* ring_buffer = get_ring_buffer(data_ptr);
+        bool buffer_empty = ring_buffer->read_data(*value);
+        int result;
+
+        if (buffer_empty) {
+            printf("[C++]: buffer is empty\n");
+            result = DPI_BUFFER_EMPTY;
+        } else {
+            printf("[C++]: successfully read 0x%08x\n", *value);
+            result = DPI_SUCCESS;
         }
 
-        if (munmap(data_ptr, full_size) != 0) {
-            return EXIT_FAILURE;
+        if (munmap(data_ptr, mapping_size) != 0) {
+            perror("munmap");
+            result = DPI_ERROR;
         }
 
-        return EXIT_SUCCESS;
+        return result;
+    }
+
+    int clear_ring_buffer(int fd) {
+        if (fd < 0) {
+            return DPI_ERROR;
+        }
+
+        constexpr size_t mapping_size = sizeof(RingBufferUint64);
+
+        void* data_ptr = mmap(
+            nullptr,
+            mapping_size,
+            PROT_READ | PROT_WRITE,
+            MAP_SHARED,
+            fd,
+            0
+        );
+
+        if (data_ptr == MAP_FAILED) {
+            perror("mmap");
+            return DPI_ERROR;
+        }
+
+        new (data_ptr) RingBufferUint64();
+        int result = DPI_SUCCESS;
+
+        if (msync(data_ptr, mapping_size, MS_SYNC) != 0) {
+            perror("msync");
+            result = DPI_ERROR;
+        }
+
+        if (munmap(data_ptr, mapping_size) != 0) {
+            perror("munmap");
+            result = DPI_ERROR;
+        }
+
+        if (result == DPI_SUCCESS)
+            printf("[C++]: ring buffer cleared\n");
+
+        return result;
     }
 }

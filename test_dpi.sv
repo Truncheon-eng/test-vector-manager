@@ -1,127 +1,203 @@
-import uvm_pkg::*;
-`include "uvm_macros.svh"
+package test_pkg;
 
-`define ARRAY_SIZE 8
-`define INT_SIZE_BYTES 4
+    import uvm_pkg::*;
+    `include "uvm_macros.svh"
 
-module test_dpi;
+    localparam int DPI_SUCCESS      = 0;
+    localparam int DPI_ERROR        = 1;
+    localparam int DPI_BUFFER_EMPTY = 2;
+    localparam int DPI_BUFFER_FULL  = 3;
+
+    localparam int TEST_VALUES_COUNT = 8;
+
 
     import "DPI-C" function int shared_memory_open();
+
     import "DPI-C" function int shared_memory_truncate(
         input int              fd,
         input longint unsigned size
     );
-    import "DPI-C" function int close_shared_memory_fd(input int fd);
-    import "DPI-C" function int write_array(
-        input int fd,
-        input int data[],
-        input int size
+
+    import "DPI-C" function int close_shared_memory_fd(
+        input int fd
     );
-    import "DPI-C" function int read_array(
-        input  int fd,
-        output int data[],
-        input  int size
+
+    import "DPI-C" function longint unsigned get_ring_buffer_size();
+
+    import "DPI-C" function int write_data(
+        input int          fd,
+        input int unsigned value
+    );
+
+    import "DPI-C" function int read_data(
+        input  int          fd,
+        output int unsigned value
+    );
+
+    import "DPI-C" function int clear_ring_buffer(
+        input int fd
     );
 
 
     class my_test extends uvm_test;
+
         `uvm_component_utils(my_test)
 
-        function new(string name, uvm_component parent);
+        function new(
+            string        name = "my_test",
+            uvm_component parent = null
+        );
             super.new(name, parent);
         endfunction
 
 
+        task check_result(
+            input int    actual,
+            input int    expected,
+            input string operation
+        );
+            if (actual != expected) begin
+                `uvm_fatal(
+                    "RING_BUFFER",
+                    $sformatf(
+                        "%s failed: expected=%0d, actual=%0d",
+                        operation,
+                        expected,
+                        actual
+                    )
+                )
+            end
+        endtask
+
+
         task run_phase(uvm_phase phase);
-            int fd;
-            int result;
-
-            int read_data_array[`ARRAY_SIZE];
-            int write_data_array[`ARRAY_SIZE];
-
+            int              fd;
+            int              result;
+            int unsigned     read_value;
             longint unsigned shared_memory_size;
+
+            int unsigned values[TEST_VALUES_COUNT];
 
             phase.raise_objection(this);
 
-            shared_memory_size =
-                `ARRAY_SIZE * `INT_SIZE_BYTES;
+            values = '{
+                32'hCAFE_0001,
+                32'hCAFE_0002,
+                32'hDEAD_BEEF,
+                32'h1234_5678,
+                32'hAABB_CCDD,
+                32'h0000_0000,
+                32'hFFFF_FFFF,
+                32'h1357_2468
+            };
 
-            foreach (write_data_array[i]) begin
-                write_data_array[i] = 32'hCAFE_0000 + i;
-            end
+            shared_memory_size = get_ring_buffer_size();
 
-            foreach (read_data_array[i]) begin
-                read_data_array[i] = 0;
-            end
-
-
-            `uvm_info("SV", "Opening shared memory", UVM_LOW)
+            `uvm_info(
+                "RING_BUFFER",
+                $sformatf("Ring buffer size: %0d bytes", shared_memory_size),
+                UVM_LOW
+            )
 
             fd = shared_memory_open();
 
             if (fd < 0) begin
-                `uvm_fatal("SV", "shared_memory_open() failed")
+                `uvm_fatal("RING_BUFFER", "shared_memory_open() failed")
             end
-
-
-            `uvm_info(
-                "SV",
-                $sformatf("Truncating shared memory to %0d bytes", shared_memory_size),
-                UVM_LOW
-            )
 
             result = shared_memory_truncate(fd, shared_memory_size);
 
-            if (result != 0) begin
-                `uvm_fatal("SV", "shared_memory_truncate() failed")
-            end
+            check_result(result, DPI_SUCCESS, "shared_memory_truncate");
 
-            `uvm_info("SV", "Reading array from shared memory", UVM_LOW)
-            result = read_array(fd, read_data_array, `ARRAY_SIZE);
+            result = clear_ring_buffer(fd);
 
-            if (result != 0) begin
-                `uvm_fatal("SV", "read_array() failed")
-            end
+            check_result(result, DPI_SUCCESS, "initial clear_ring_buffer");
 
-
-            foreach (read_data_array[i]) begin
-                `uvm_info("SV",
-                    $sformatf("read_data_array[%0d] = 0x%08X", i, read_data_array[i]),
-                    UVM_LOW
-                )
-            end
-
-
-            `uvm_info("SV", "Writing array to shared memory", UVM_LOW)
-
-            foreach (write_data_array[i]) begin
+            foreach (values[i]) begin
                 `uvm_info(
-                    "SV",
-                    $sformatf("write_data_array[%0d] = 0x%08X", i, write_data_array[i]),
+                    "RING_BUFFER",
+                    $sformatf("Writing values[%0d] = 0x%08X", i, values[i]),
+                    UVM_LOW
+                )
+
+                result = write_data(fd, values[i]);
+
+                check_result(
+                    result,
+                    DPI_SUCCESS,
+                    $sformatf("write_data[%0d]", i)
+                );
+            end
+
+            foreach (values[i]) begin
+                read_value = 0;
+
+                result = read_data(fd, read_value);
+
+                check_result(
+                    result,
+                    DPI_SUCCESS,
+                    $sformatf("read_data[%0d]", i)
+                );
+
+                if (read_value !== values[i]) begin
+                    `uvm_fatal(
+                        "RING_BUFFER",
+                        $sformatf(
+                            "Mismatch at index %0d: expected 0x%08X, got 0x%08X",
+                            i,
+                            values[i],
+                            read_value
+                        )
+                    )
+                end
+
+                `uvm_info(
+                    "RING_BUFFER",
+                    $sformatf("Read values[%0d] = 0x%08X",i, read_value),
                     UVM_LOW
                 )
             end
 
+            read_value = 32'hDEAD_BEEF;
+            result = read_data(fd, read_value);
 
-            result = write_array(fd,write_data_array,`ARRAY_SIZE);
-            if (result != 0) begin
-                `uvm_fatal("SV","write_array() failed")
+            check_result(result, DPI_BUFFER_EMPTY, "read from drained buffer");
+
+            foreach (values[i]) begin
+                result = write_data(fd, values[i]);
+                check_result(result, DPI_SUCCESS, $sformatf("second write_data[%0d]", i));
             end
+
+            result = clear_ring_buffer(fd);
+
+            check_result(result, DPI_SUCCESS, "clear_ring_buffer");
+
+            read_value = 32'hDEAD_BEEF;
+            result = read_data(fd, read_value);
+
+            check_result(result, DPI_BUFFER_EMPTY, "read after clear_ring_buffer");
+
             result = close_shared_memory_fd(fd);
 
-            if (result != 0) begin
-                `uvm_error("SV", "close_shared_memory_fd() failed")
-            end
+            check_result(result, DPI_SUCCESS, "close_shared_memory_fd");
+
+            `uvm_info("RING_BUFFER", "All checks passed", UVM_LOW)
 
             phase.drop_objection(this);
         endtask
 
     endclass
 
+endpackage
+
+
+module test_dpi;
+
+    import uvm_pkg::*;
+    import test_pkg::*;
 
     initial begin
-        uvm_top.set_report_id_action_hier("UVM/RELNOTES", UVM_NO_ACTION);
-        uvm_top.set_report_id_action_hier("NO_DPI_TSTNAME", UVM_NO_ACTION);
         run_test("my_test");
     end
 

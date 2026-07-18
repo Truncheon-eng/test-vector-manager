@@ -36,10 +36,15 @@ int main() {
             }
                 
             case 1: {
-                read_data(fd);
+                uint32_t value {};
+                read_data(fd, &value);
                 break;
             }
             case 2: {
+                clear_ring_buffer(fd);
+                break;
+            }
+            case 3: {
                 cout << INFO << " Goodbye" << endl;
                 condition = false;
                 break;
