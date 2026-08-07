@@ -1,4 +1,5 @@
 #include "server.hpp"
+#include "SharedMemoryLock.hpp"
 #include <cstdlib>
 #include <sys/mman.h>
 
@@ -42,6 +43,13 @@ RingBufferUint64* get_ring_buffer(void* data_ptr) {
 
 int write_data(int fd, uint32_t value) {
     if (fd < 0) {
+        return DPI_ERROR;
+    }
+
+    // исползование блокировки
+    SharedMemoryLock lock(fd);
+    if (!lock.owns_lock()) {
+        perror("flock");
         return DPI_ERROR;
     }
 
@@ -96,9 +104,16 @@ int read_data(int fd, uint32_t* value) {
         return DPI_ERROR;
     }
 
+    // исползование блокировки
+    SharedMemoryLock lock(fd);
+    if (!lock.owns_lock()) {
+        perror("flock");
+        return DPI_ERROR;
+    }
+
     constexpr size_t mapping_size = sizeof(RingBufferUint64);
 
-    // получаем указтаель на разделяемую память
+    // получаем указатель на разделяемую память
     void* data_ptr = mmap(
         nullptr,
         mapping_size,
@@ -138,6 +153,13 @@ int read_data(int fd, uint32_t* value) {
 
 int clear_ring_buffer(int fd) {
     if (fd < 0) {
+        return DPI_ERROR;
+    }
+
+    // исползование блокировки
+    SharedMemoryLock lock(fd);
+    if (!lock.owns_lock()) {
+        perror("flock");
         return DPI_ERROR;
     }
 

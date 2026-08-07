@@ -18,6 +18,7 @@
 #include <sys/mman.h>
 
 #include "server/RingBuffer.hpp"
+#include "server/SharedMemoryLock.hpp"
 
 #define FILENAME "a.c"
 #define SIZE 0x1000
@@ -34,22 +35,29 @@ enum DpiResult {
 };
 
 extern "C" {
+    // обертка над системным вызовом shm_open
     int shared_memory_open(void) {
         return shm_open(FILENAME, O_CREAT | O_RDWR, 0666);
     }
-
+    // обертка над системным вызовом ftruncate 
     int shared_memory_truncate(int fd, size_t size) {
         return ftruncate(fd, size);
     }
-
+    // обертка над системным вызовом close
     int close_shared_memory_fd(int fd) {
         return close(fd);
     }
-
+    // получение размера объекта RinBufferUint64 
     size_t get_ring_buffer_size(void) {
         return sizeof(RingBufferUint64);
     }
 
+    // функция получает на вход указатель разделямой памяти и интерпретирует данные,
+    // находящиеся по денному указателю, как RingBufferUint64
+    //
+    //  data_ptr - указатель на разделямую память
+    //
+    //  Возвращаемое знчкение: указатель на разделяемую память, как указатель на кольцевой буфер
     RingBufferUint64* get_ring_buffer(void* data_ptr) {
         RingBufferUint64* result = static_cast<RingBufferUint64*>(data_ptr);
 
@@ -60,8 +68,20 @@ extern "C" {
         return result;
     }
 
+    // функция, которая записывает переданное значение в кольцевой буфер
+    //
+    // fd - файловый дескриптор, ассоциированный с разделямой памятью
+    // value - значение которое необходимо записать в кольцевой буфер
+    //
+    // Возвращаемое значение: статус записи.
     int write_data(int fd, uint32_t value) {
         if (fd < 0) {
+            return DPI_ERROR;
+        }
+	// RAII обертка для сериализованного доступа к разделямой памяти
+        SharedMemoryLock lock(fd);
+        if (!lock.owns_lock()) {
+            perror("flock");
             return DPI_ERROR;
         }
 
@@ -105,9 +125,22 @@ extern "C" {
 
         return result;
     }
-
+    
+    // функция, которая считывает пзначение из кольцевого буфера по указателю value, переданному в качестве параметра
+    //
+    // fd - файловый дескриптор, ассоцированный с разделямой памятью
+    // value - указатель, по которому будет происходить запись значения из кольцевого буфера.
+    //
+    // Возвращаемое значение: статус чтения.
     int read_data(int fd, uint32_t* value) {
         if (fd < 0 || value == nullptr) {
+            return DPI_ERROR;
+        }
+
+	// RAII обертка для сериализованного доступа к разделямой памяти
+        SharedMemoryLock lock(fd);
+        if (!lock.owns_lock()) {
+            perror("flock");
             return DPI_ERROR;
         }
 
@@ -147,8 +180,20 @@ extern "C" {
         return result;
     }
 
+    // функция, которая оичщает кольцевой буфер
+    //
+    // fd - файловый дескриптор, ассоциированный с разделфмой памятью
+    //
+    // Возвращаемое значение: статус очистки кольцевого буфера
     int clear_ring_buffer(int fd) {
         if (fd < 0) {
+            return DPI_ERROR;
+        }
+
+	// RAII обертка для сериализованного доступа к разделямой памяти
+        SharedMemoryLock lock(fd);
+        if (!lock.owns_lock()) {
+            perror("flock");
             return DPI_ERROR;
         }
 
@@ -168,6 +213,7 @@ extern "C" {
             return DPI_ERROR;
         }
 
+	// вызов оператора placement new для повторной инициализации кольцевого буфера (т.е. для его очистки)
         new (data_ptr) RingBufferUint64();
         int result = DPI_SUCCESS;
 
