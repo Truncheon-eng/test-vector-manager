@@ -1,0 +1,39 @@
+OBJ_DIR := ./obj  
+GCC = g++
+
+FLAGS = -g
+
+.PHONY: all clean
+
+clean:
+	@if [ -d $(OBJ_DIR) ]; then \
+		rm -rf $(OBJ_DIR); \
+	fi
+
+	@if [ -f "client.out" ]; then \
+		rm client.out; \
+	fi
+	
+	@if [ -f "server.out" ]; then \
+		rm server.out; \
+	fi
+
+all: client server
+
+client: obj/auxiliary.o obj/client.o
+	$(GCC) $(FLAGS) $^ -o client.out
+
+server: obj/auxiliary.o obj/server.o
+	$(GCC) $(FLAGS) $^ -o server.out
+
+obj/auxiliary.o: src/auxiliary.cpp | $(OBJ_DIR)
+	$(GCC) $(FLAGS) -c $< -o $@
+
+obj/client.o: src/client.cpp | $(OBJ_DIR)
+	$(GCC) $(FLAGS) -c $< -o $@
+
+obj/server.o: src/server.cpp | $(OBJ_DIR)
+	$(GCC) $(FLAGS) -c $< -o $@
+
+$(OBJ_DIR):
+	mkdir -p $@
