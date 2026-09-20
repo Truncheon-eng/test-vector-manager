@@ -1,6 +1,6 @@
-#include "../include/lfsr.hpp"
-#include "../include/auxiliary.hpp"
-#include "../include/packet.hpp"
+#include "lfsr.hpp"
+#include "auxiliary.hpp"
+#include "packet.hpp"
 #include <chrono>
 #include <cstdlib>
 #include <thread>

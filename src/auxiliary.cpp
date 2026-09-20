@@ -1,4 +1,4 @@
-#include "../include/auxiliary.hpp"
+#include "auxiliary.hpp"
 
 int shared_memory_open(void) {
     int fd = shm_open(FILENAME, O_CREAT | O_RDWR, 0666);

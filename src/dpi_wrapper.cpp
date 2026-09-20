@@ -1,7 +1,7 @@
 #include <cstdint>
 
-#include "../include/auxiliary.hpp"
-#include "../include/packet.hpp"
+#include "auxiliary.hpp"
+#include "packet.hpp"
 
 std::ostream& operator<<(std::ostream& out, const test_packet_t& packet) {
     out << packet.data;

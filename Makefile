@@ -1,45 +1,41 @@
 # ============================================================
-# Configuration
+# Инструменты и пути
 # ============================================================
-CXX := g++
-
+CXX       := g++
 VERILATOR := verilator
 
-UVM_DIR := $(CURDIR)/uvm-verilator
-UVM_REPO := https://github.com/chipsalliance/uvm-verilator.git
+UVM_DIR   := $(CURDIR)/uvm-verilator
+UVM_REPO  := https://github.com/chipsalliance/uvm-verilator.git
+UVM_MARKER:= .uvm_downloaded
 
-OBJ_DIR := obj
-OUT_DIR := out
-
-
-# ============================================================
-# UVM
-# ============================================================
-TOP := stress_test_top
-
-SV_SRC := uvm/stress_test.sv
-
+OBJ_DIR   := obj
+OUT_DIR   := out
 
 # ============================================================
-# C++ DPI sources
+# Настройки компиляции C++
 # ============================================================
-DPI_SRC := \
-	src/auxiliary.cpp \
-	src/dpi_wrapper.cpp
-
+INCLUDES  := -Iinclude -Isrc
+CXXFLAGS  := -std=c++17 -O2 -g $(INCLUDES)
+LDFLAGS   := 
 
 # ============================================================
-# Server
+# Исходные файлы и объекты
 # ============================================================
-SERVER_SRC := \
-	src/server.cpp \
-	src/auxiliary.cpp
+TOP        := stress_test_top
+SV_SRC     := $(wildcard uvm/*.sv)
+UVM_SRC    := $(UVM_DIR)/src/uvm_pkg.sv $(SV_SRC)
+UVM_BIN    := $(OUT_DIR)/V$(TOP)
 
+# Исключаем специфичные файлы из общего списка DPI
+DPI_SRC    := $(filter-out src/server.cpp src/client.cpp,$(wildcard src/*.cpp))
+
+# Серверная часть
+SERVER_SRC := $(filter-out src/client.cpp src/dpi_wrapper.cpp,$(wildcard src/*.cpp))
+SERVER_OBJS:= $(patsubst src/%.cpp,$(OBJ_DIR)/%.o,$(SERVER_SRC))
 SERVER_BIN := server.out
 
-
 # ============================================================
-# Verilator flags
+# Флаги Verilator
 # ============================================================
 VFLAGS := \
 	--binary \
@@ -56,103 +52,80 @@ VFLAGS := \
 	--top-module $(TOP) \
 	--Mdir $(OUT_DIR)
 
-# ============================================================
-# UVM sources
-# ============================================================
-UVM_SRC := \
-	$(UVM_DIR)/src/uvm_pkg.sv \
-	$(SV_SRC)
+# Передаем те же настройки компиляции C++ внутрь Verilator DPI
+VERILATOR_CFLAGS := -std=c++17 -O2 -I$(CURDIR)/include -I$(CURDIR)/src
 
 
 # ============================================================
-# Resulting UVM binary
+# Параметры запуска по умолчанию
 # ============================================================
-UVM_BIN := $(OUT_DIR)/V$(TOP)
-
-
-# ============================================================
-# Runtime configuration
-# ============================================================
-N ?= 1000
-
+N        ?= 1000
 SHM_SIZE ?= 4096
 
-
 # ============================================================
-# Targets
+# Основные таргеты
 # ============================================================
-.PHONY: \
-	all \
-	uvm_download \
-	uvm_build \
-	uvm_run \
-	server \
-	clean \
-	distclean
-
+.PHONY: all uvm_download uvm_build uvm_run server clean distclean
 
 all: server uvm_build
 
+# Глобальный таргет для скачивания (для обратной совместимости)
+uvm_download: $(UVM_MARKER)
 
-# ============================================================
-# Download UVM
-# ============================================================
-uvm_download:
-
+$(UVM_MARKER):
 	@if [ ! -d "$(UVM_DIR)" ]; then \
 		echo "Downloading uvm-verilator..."; \
 		git clone $(UVM_REPO) $(UVM_DIR); \
-	else \
-		echo "uvm-verilator already exists"; \
 	fi
-
-
-# ============================================================
-# Build server
-# ============================================================
-server:
-
-	$(CXX) \
-		-std=c++17 \
-		-O2 \
-		-Isrc \
-		-g \
-		$(SERVER_SRC) \
-		-o $(SERVER_BIN)
-
+	@touch $(UVM_MARKER)
 
 # ============================================================
-# Build UVM + DPI
+# Сборка сервера (C++)
 # ============================================================
-uvm_build: uvm_download
+server: $(SERVER_BIN)
 
+$(SERVER_BIN): $(SERVER_OBJS)
+	@echo "Linking Server: $@"
+	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $@
+
+# Папка OBJ_DIR создается как order-only зависимость
+$(OBJ_DIR)/%.o: src/%.cpp | $(OBJ_DIR)
+	@echo "Compiling C++: $<"
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# ============================================================
+# Сборка UVM + DPI (Verilator)
+# ============================================================
+uvm_build: $(UVM_BIN)
+
+# Зависит от файлов исходников и от маркера скачивания UVM
+$(UVM_BIN): $(UVM_MARKER) $(UVM_SRC) $(DPI_SRC) | $(OUT_DIR)
+	@echo "Running Verilator..."
 	$(VERILATOR) \
 		$(VFLAGS) \
 		$(UVM_SRC) \
 		$(DPI_SRC) \
-		-CFLAGS "-std=c++17 -O2 -Isrc"
-
+		-CFLAGS "$(VERILATOR_CFLAGS)"
 
 # ============================================================
-# Run UVM
+# Служебные таргеты для создания директорий
+# ============================================================
+$(OBJ_DIR) $(OUT_DIR):
+	@mkdir -p $@
+
+# ============================================================
+# Запуск симуляции
 # ============================================================
 uvm_run: uvm_build
-
-	$(UVM_BIN) \
-		+NUM_TRANSACTIONS=$(N) \
-		+SHM_SIZE=$(SHM_SIZE)
-
+	$(UVM_BIN) +NUM_TRANSACTIONS=$(N) +SHM_SIZE=$(SHM_SIZE)
 
 # ============================================================
-# Clean
+# Очистка
 # ============================================================
 clean:
-
-	@rm -rf \
-		$(OUT_DIR) \
-		$(OBJ_DIR) \
-		$(SERVER_BIN)
-
+	@echo "Cleaning build artifacts..."
+	@rm -rf $(OUT_DIR) $(OBJ_DIR) $(SERVER_BIN)
 
 distclean: clean
-	@rm -rf $(UVM_DIR)
+	@echo "Deep cleaning (removing UVM repo)..."
+	@rm -rf $(UVM_DIR) $(UVM_MARKER)

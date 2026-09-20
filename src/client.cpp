@@ -3,9 +3,9 @@
 #include <cstdlib>
 #include <thread>
 
-#include "../include/packet.hpp"
-#include "../include/auxiliary.hpp"
-#include "../include/lfsr.hpp"
+#include "packet.hpp"
+#include "auxiliary.hpp"
+#include "lfsr.hpp"
 
 
 std::ostream& operator<<(std::ostream& out, const test_packet_t& packet) {
