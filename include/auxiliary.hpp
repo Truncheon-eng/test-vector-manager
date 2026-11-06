@@ -35,7 +35,8 @@ using std::endl;
     DPI_SUCCESS      = 0,
     DPI_ERROR        = 1,
     DPI_BUFFER_EMPTY = 2,
-    DPI_BUFFER_FULL  = 3
+    DPI_BUFFER_FULL  = 3,
+    DPI_TIMEOUT      = 4
   };
 
 int shared_memory_open(void);
@@ -195,6 +196,86 @@ int close_shared_memory_fd(int fd);
     if (result == DPI_SUCCESS)
       cout << INFO << " ring buffer cleared" << endl;
     return result;
+  }
+
+
+  // Monotonic clock in microseconds for host-side waits
+  inline uint64_t monotonic_us() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return static_cast<uint64_t>(ts.tv_sec) * 1000000ULL +
+           static_cast<uint64_t>(ts.tv_nsec) / 1000ULL;
+  }
+
+  inline void sleep_us(uint64_t us) {
+    struct timespec ts;
+    ts.tv_sec  = static_cast<time_t>(us / 1000000ULL);
+    ts.tv_nsec = static_cast<long>((us % 1000000ULL) * 1000ULL);
+    while (nanosleep(&ts, &ts) == -1 && errno == EINTR) {
+    }
+  }
+
+  // Blocking burst read: waits on the host side (no simulation time involved)
+  // until at least one packet is available or timeout_us expires, then drains
+  // up to max_count packets with a single flock/mmap cycle.
+  // Returns DPI_SUCCESS (*out_count >= 1), DPI_TIMEOUT or DPI_ERROR.
+  template <typename T>
+  int read_burst (int fd, T* out, int max_count, int* out_count,
+                  uint64_t timeout_us, uint64_t poll_us = 50) {
+    if (fd < 0 || out == nullptr || out_count == nullptr || max_count <= 0)
+      return DPI_ERROR;
+
+    *out_count = 0;
+
+    const uint64_t deadline = monotonic_us() + timeout_us;
+
+    while (true) {
+      int drained = 0;
+
+      {
+        SharedMemoryLock lock(fd);
+        if (!lock.owns_lock()) {
+          perror("flock");
+          return DPI_ERROR;
+        }
+
+        constexpr size_t mapping_size = sizeof(RingBuffer<SIZE, T>);
+        void* data_ptr = mmap(
+          nullptr,
+          mapping_size,
+          PROT_READ | PROT_WRITE,
+          MAP_SHARED,
+          fd,
+          0
+        );
+
+        if (data_ptr == MAP_FAILED) {
+          perror("mmap");
+          return DPI_ERROR;
+        }
+
+        RingBuffer<SIZE, T>* ring_buffer = get_ring_buffer<T>(data_ptr);
+
+        while (drained < max_count &&
+               ring_buffer->read_data(out[drained]) == EXIT_SUCCESS)
+          drained++;
+
+        if (munmap(data_ptr, mapping_size) != 0) {
+          perror("munmap");
+          return DPI_ERROR;
+        }
+      }
+
+      if (drained > 0) {
+        *out_count = drained;
+        return DPI_SUCCESS;
+      }
+
+      if (monotonic_us() >= deadline)
+        return DPI_TIMEOUT;
+
+      sleep_us(poll_us);
+    }
   }
 
 

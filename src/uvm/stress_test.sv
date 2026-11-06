@@ -12,16 +12,16 @@ class stress_test extends uvm_test;
   const lfsr_state_t LFSR_SEED = 16'hACE1;
 
   // Runtime configuration (plusargs)
-  stat_counter_t   num_transactions = 1000;
-  longint unsigned poll_delay_ns    = 1;          // pause on empty reads: no zero-delay spin
-  longint unsigned watchdog_ns      = 10_000_000; // abort if the server produces nothing
+  stat_counter_t num_transactions = 1000;
+  int            burst_max        = 256;        // packets per DPI burst (ring holds SIZE=1024)
+  int            read_timeout_us  = 10_000_000; // host-time wait per burst; server absent => fatal
 
   // Internal state descriptors
   protected int fd = -1;
 
   // Simulation metrics and counters
   stat_counter_t received_count  = 0;
-  stat_counter_t empty_count     = 0;
+  stat_counter_t burst_count     = 0;
   stat_counter_t sequence_errors = 0;
   stat_counter_t data_errors     = 0;
   stat_counter_t resync_count    = 0;
@@ -37,12 +37,12 @@ class stress_test extends uvm_test;
     super.build_phase(phase);
 
     void'($value$plusargs("NUM_TRANSACTIONS=%d", num_transactions));
-    void'($value$plusargs("POLL_NS=%d", poll_delay_ns));
-    void'($value$plusargs("WATCHDOG_NS=%d", watchdog_ns));
+    void'($value$plusargs("BURST_MAX=%d", burst_max));
+    void'($value$plusargs("READ_TIMEOUT_US=%d", read_timeout_us));
 
     `uvm_info(get_type_name(),
-              $sformatf("Configured NUM_TRANSACTIONS=%0d POLL_NS=%0d WATCHDOG_NS=%0d",
-                        num_transactions, poll_delay_ns, watchdog_ns),
+              $sformatf("Configured NUM_TRANSACTIONS=%0d BURST_MAX=%0d READ_TIMEOUT_US=%0d",
+                        num_transactions, burst_max, read_timeout_us),
               UVM_MEDIUM)
   endfunction : build_phase
 
@@ -107,6 +107,7 @@ class stress_test extends uvm_test;
   // --------------------------------------------------------
   virtual task run_phase(uvm_phase phase);
     int            status;
+    int            staged;
     bit            seq_ok;
     bit            data_ok;
     stat_counter_t received_sequence;
@@ -118,76 +119,84 @@ class stress_test extends uvm_test;
 
     phase.raise_objection(this);
 
-    // Watchdog: abort if the server is absent or stalled
-    fork
-      begin : watchdog_timer
-        #(watchdog_ns * 1ns);
-        `uvm_fatal ("WATCHDOG",
-                    $sformatf("No completion in %0dns: received %0d of %0d packets. Is the server running?",
-                              watchdog_ns, received_count, num_transactions))
-      end
-    join_none
-
     // Initialize IPC connection via DPI
     fd = dpi_shared_memory_open();
     if (fd < 0) begin
       `uvm_fatal ("SHM_OPEN_FATAL",
                   "dpi_shared_memory_open() failed. Server not running?")
+      // NB: under Verilator $finish does not preempt a zero-delay loop - exit explicitly
+      phase.drop_objection(this);
+      return;
     end
     `uvm_info(get_full_name(),
               $sformatf("SHM_OK: shared memory opened, fd=%0d", fd),
               UVM_LOW)
 
-    // Main transaction processing loop
+    // Main transaction processing loop:
+    // blocking burst reads — all waiting happens on the C++ side (host time),
+    // so the testbench contains no # delays at all
     while (received_count < num_transactions) begin
-      status = dpi_read_data(fd, received_sequence, received_data);
+      status = dpi_read_burst(fd, read_timeout_us, burst_max, staged);
 
-      case (status)
-        DPI_SUCCESS: begin
-          // Data successfully retrieved, proceed to evaluation below
-        end
+      if (status != DPI_SUCCESS) begin
+        case (status)
+          DPI_TIMEOUT: begin
+            `uvm_fatal ("READ_TIMEOUT",
+                        $sformatf("No packets in %0dus: received %0d of %0d. Is the server running?",
+                                  read_timeout_us, received_count, num_transactions))
+          end
 
-        DPI_BUFFER_EMPTY: begin
-          empty_count++;
-          #(poll_delay_ns * 1ns); // advance time instead of zero-delay spinning
-          continue;
-        end
+          DPI_ERROR: begin
+            `uvm_fatal ("READ_FATAL",
+                        "dpi_read_burst() returned DPI_ERROR. Connection lost.")
+          end
 
-        DPI_ERROR: begin
-          `uvm_fatal ("READ_FATAL",
-                      "dpi_read_data() returned DPI_ERROR. Connection lost.")
-        end
+          default: begin
+            `uvm_fatal ("READ_FATAL",
+                        $sformatf("Unknown DPI result code: %0d", status))
+          end
+        endcase
 
-        default: begin
-          `uvm_fatal ("READ_FATAL",
-                      $sformatf("Unknown DPI result code: %0d", status))
-        end
-      endcase
-
-      // Computing golden values and evaluating transactions
-      expected_data = lfsr_next(lfsr_state);
-
-      seq_ok  = check_sequence(received_sequence, expected_sequence);
-      data_ok = check_payload(received_data, expected_data, received_sequence);
-      log_progress(received_sequence, received_data, expected_data);
-
-      // Resynchronize the golden model after a loss/corruption:
-      // the received payload IS the server's current LFSR state
-      if (!seq_ok || !data_ok) begin
-        lfsr_state        = received_data[15:0];
-        expected_sequence = received_sequence;
-        resync_count++;
+        // NB: under Verilator $finish does not preempt a zero-delay loop - exit explicitly
+        phase.drop_objection(this);
+        return;
       end
 
-      received_count++;
-      expected_sequence++;
+      burst_count++;
+
+      for (int i = 0; (i < staged) && (received_count < num_transactions); i++) begin
+        status = dpi_burst_packet(i, received_sequence, received_data);
+        if (status != DPI_SUCCESS) begin
+          `uvm_fatal ("READ_FATAL",
+                      $sformatf("dpi_burst_packet(%0d) failed with code %0d", i, status))
+          phase.drop_objection(this);
+          return;
+        end
+
+        // Computing golden values and evaluating transactions
+        expected_data = lfsr_next(lfsr_state);
+
+        seq_ok  = check_sequence(received_sequence, expected_sequence);
+        data_ok = check_payload(received_data, expected_data, received_sequence);
+        log_progress(received_sequence, received_data, expected_data);
+
+        // Resynchronize the golden model after a loss/corruption:
+        // the received payload IS the server's current LFSR state
+        if (!seq_ok || !data_ok) begin
+          lfsr_state        = received_data[15:0];
+          expected_sequence = received_sequence;
+          resync_count++;
+        end
+
+        received_count++;
+        expected_sequence++;
+      end
     end
 
-    disable fork; // stop the watchdog
-
     `uvm_info(get_full_name(),
-              $sformatf("DONE: received %0d packets, %0d empty polls",
-                        received_count, empty_count),
+              $sformatf("DONE: received %0d packets in %0d bursts",
+                        received_count,
+                        burst_count),
               UVM_MEDIUM)
 
     phase.drop_objection(this);
@@ -234,7 +243,7 @@ class stress_test extends uvm_test;
     msg.push_back("========================================");
     msg.push_back($sformatf("Requested:       %0d", num_transactions));
     msg.push_back($sformatf("Received:        %0d", received_count));
-    msg.push_back($sformatf("Empty reads:     %0d", empty_count));
+    msg.push_back($sformatf("Bursts:          %0d", burst_count));
     msg.push_back($sformatf("Sequence errors: %0d", sequence_errors));
     msg.push_back($sformatf("Data errors:     %0d", data_errors));
     msg.push_back($sformatf("Resyncs:         %0d", resync_count));
