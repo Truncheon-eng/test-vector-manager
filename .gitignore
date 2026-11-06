@@ -1,3 +1,5 @@
 bin/*
 obj/*
 uvm_out/
+.uvm_downloaded
+.vscode/
