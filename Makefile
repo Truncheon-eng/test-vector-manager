@@ -18,6 +18,9 @@ CLIENT  := $(BIN_DIR)/client
 DESTROY := $(BIN_DIR)/destroy_shm
 AUX_OBJ := $(OBJ_DIR)/auxiliary_functions.o
 
+# POSIX shm segment used by the TVM stress infra (auxiliary.hpp: FILENAME)
+SHM_FILE := /dev/shm/tvm_shm
+
 # ============================================================
 # Parameters
 # ============================================================
@@ -164,6 +167,7 @@ $(OBJ_DIR) $(BIN_DIR) $(UVM_OUT):
 # ------------------------------------------------------------
 clean:
 	@rm -rf $(BIN_DIR) $(OBJ_DIR) $(UVM_OUT)
+	@rm -f $(SHM_FILE)
 
 distclean: clean
 	@rm -rf $(UVM_DIR) $(UVM_MARKER)

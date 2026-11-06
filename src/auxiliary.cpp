@@ -21,9 +21,18 @@
     return fd;
   }
 
-  int shared_memory_truncate(int fd, size_t size) {
+int shared_memory_unlink(void) {
+    // Best effort: ENOENT simply means there is no stale segment
+    if (shm_unlink(FILENAME) != 0 && errno != ENOENT) {
+        perror("shm_unlink");
+        return -1;
+    }
+    return 0;
+}
+
+int shared_memory_truncate(int fd, size_t size) {
     return ftruncate(fd, size);
-  }
+}
 
   int close_shared_memory_fd(int fd) {
     return close(fd);

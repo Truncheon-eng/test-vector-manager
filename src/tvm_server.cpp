@@ -36,6 +36,13 @@
     uint64_t full_count {0};
     uint64_t burst_count {0};
 
+    // Start from a fresh segment: drop stale data from previous runs so a
+    // consumer can never mistake leftovers for a live stream.
+    // Contract: the server is started BEFORE the consumer (an early consumer
+    // would be stranded on the orphaned inode and fail loudly with a timeout).
+    if (shared_memory_unlink() != 0)
+      return EXIT_FAILURE;
+
     int fd = shared_memory_open();
     if (fd < 0) {
       perror("shm_open");

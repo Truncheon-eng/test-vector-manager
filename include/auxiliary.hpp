@@ -43,6 +43,8 @@ using std::endl;
 
 int shared_memory_open(void);
 
+int shared_memory_unlink(void);
+
 int shared_memory_truncate(int fd, size_t size);
 
 int close_shared_memory_fd(int fd);
