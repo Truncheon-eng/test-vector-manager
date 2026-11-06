@@ -64,7 +64,7 @@ class stress_test extends uvm_test;
       return 1;
 
     sequence_errors++;
-    if (sequence_errors) begin
+    if (sequence_errors <= 10) begin
       `uvm_error ("SEQ_ERROR",
                   $sformatf("Expected seq=%0d, received seq=%0d",
                             expected, actual))
@@ -80,7 +80,7 @@ class stress_test extends uvm_test;
       return 1;
 
     data_errors++;
-    if (data_errors) begin
+    if (data_errors <= 10) begin
       `uvm_error("DATA_ERROR",
                   $sformatf("seq=%0d: expected=0x%04X, received=0x%04X",
                             seq,
