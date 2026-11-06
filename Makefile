@@ -106,7 +106,7 @@ VFLAGS := \
 # ============================================================
 # Main Targets
 # ============================================================
-.PHONY: all tvm_server uvm_download uvm_build uvm_run clean distclean list help
+.PHONY: all tvm_server uvm_download uvm_build uvm_run uvm_stress clean distclean list help
 
 all: $(SERVER) $(CLIENT) $(DESTROY) $(TVM_SERVER)
 
@@ -157,6 +157,26 @@ uvm_run: uvm_build
 	@echo ">>> [run] NUM_TRANSACTIONS=$(N)"
 	$(UVM_BIN) +NUM_TRANSACTIONS=$(N)
 
+# ------------------------------------------------------------
+# One-shot stress run: server (background) + sim + cleanup.
+# Exit code follows the test verdict, so the target is CI-usable.
+# ------------------------------------------------------------
+uvm_stress: uvm_build $(TVM_SERVER)
+	@echo ">>> [stress] N=$(N)"
+	@rm -f $(SHM_FILE); \
+	$(TVM_SERVER) $(N) > $(UVM_OUT)/tvm_server.log 2>&1 & \
+	sleep 0.3; \
+	$(UVM_BIN) +NUM_TRANSACTIONS=$(N) | tee $(UVM_OUT)/sim.log; \
+	wait; \
+	echo ">>> [stress] server log:"; \
+	cat $(UVM_OUT)/tvm_server.log; \
+	rm -f $(SHM_FILE); \
+	if grep -q "Test status:     SUCCESS" $(UVM_OUT)/sim.log; then \
+		exit 0; \
+	else \
+		exit 1; \
+	fi
+
 $(OBJ_DIR) $(BIN_DIR) $(UVM_OUT):
 	@mkdir -p $@
 
@@ -195,6 +215,7 @@ help:
 	@echo "  uvm_download - Clone uvm-verilator repository"
 	@echo "  uvm_build    - Build UVM testbench with Verilator + DPI"
 	@echo "  uvm_run      - Build and run UVM stress test (server separately!)"
+	@echo "  uvm_stress   - One-shot: server + sim + cleanup, rc = test verdict"
 	@echo "  clean        - Remove bin/, obj/, uvm_out/"
 	@echo "  distclean    - clean + remove uvm-verilator/"
 	@echo "  list         - Show variables"
