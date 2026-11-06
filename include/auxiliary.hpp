@@ -90,6 +90,9 @@ int close_shared_memory_fd(int fd);
     if (buffer_full) {
       result = DPI_BUFFER_FULL;
     } else {
+      // Wake a futex-waiting consumer (legacy single-packet path; the SPSC
+      // contract still forbids mixing more than one writer/reader overall)
+      ring_buffer->notify_data();
       result = DPI_SUCCESS;
     }
 
@@ -189,6 +192,8 @@ int close_shared_memory_fd(int fd);
     if (buffer_empty) {
       result = DPI_BUFFER_EMPTY;
     } else {
+      // Wake a futex-waiting producer (legacy single-packet path)
+      ring_buffer->notify_space();
       result = DPI_SUCCESS;
     }
 
