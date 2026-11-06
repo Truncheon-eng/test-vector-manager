@@ -43,7 +43,7 @@ class stress_test extends uvm_test;
     `uvm_info(get_type_name(),
               $sformatf("Configured NUM_TRANSACTIONS=%0d POLL_NS=%0d WATCHDOG_NS=%0d",
                         num_transactions, poll_delay_ns, watchdog_ns),
-              UVM_NONE)
+              UVM_MEDIUM)
   endfunction : build_phase
 
   // --------------------------------------------------------
@@ -64,34 +64,36 @@ class stress_test extends uvm_test;
       return 1;
 
     sequence_errors++;
-    if (sequence_errors <= 10) begin
-      `uvm_error("SEQ_ERROR",
-                 $sformatf("Expected seq=%0d, received seq=%0d",
-                           expected, actual))
+    if (sequence_errors) begin
+      `uvm_error ("SEQ_ERROR",
+                  $sformatf("Expected seq=%0d, received seq=%0d",
+                            expected, actual))
     end
     return 0;
   endfunction : check_sequence
 
   // Verifies the packet contents validity; returns 1 on match
-  function automatic bit check_payload(int unsigned   actual_data,
-                                       lfsr_state_t   expected_data,
-                                       stat_counter_t seq);
+  function automatic bit check_payload (int unsigned   actual_data,
+                                        lfsr_state_t   expected_data,
+                                        stat_counter_t seq);
     if (actual_data[15:0] == expected_data)
       return 1;
 
     data_errors++;
-    if (data_errors <= 10) begin
+    if (data_errors) begin
       `uvm_error("DATA_ERROR",
-                 $sformatf("seq=%0d: expected=0x%04X, received=0x%04X",
-                           seq, expected_data, actual_data[15:0]))
+                  $sformatf("seq=%0d: expected=0x%04X, received=0x%04X",
+                            seq,
+                            expected_data,
+                            actual_data[15:0]))
     end
     return 0;
   endfunction : check_payload
 
   // Periodic simulation progress logger
-  function automatic void log_progress(stat_counter_t seq,
-                                       int unsigned   actual_data,
-                                       lfsr_state_t   expected_data);
+  function automatic void log_progress (stat_counter_t seq,
+                                        int unsigned   actual_data,
+                                        lfsr_state_t   expected_data);
     if ((received_count % 1000) == 0) begin
       `uvm_info("PACKET",
                 $sformatf("seq=%0d data=0x%04X expected=0x%04X",
@@ -120,17 +122,17 @@ class stress_test extends uvm_test;
     fork
       begin : watchdog_timer
         #(watchdog_ns * 1ns);
-        `uvm_fatal("WATCHDOG",
-                   $sformatf("No completion in %0dns: received %0d of %0d packets. Is the server running?",
-                             watchdog_ns, received_count, num_transactions))
+        `uvm_fatal ("WATCHDOG",
+                    $sformatf("No completion in %0dns: received %0d of %0d packets. Is the server running?",
+                              watchdog_ns, received_count, num_transactions))
       end
     join_none
 
     // Initialize IPC connection via DPI
     fd = dpi_shared_memory_open();
     if (fd < 0) begin
-      `uvm_fatal("SHM_OPEN_FATAL",
-                 "dpi_shared_memory_open() failed. Server not running?")
+      `uvm_fatal ("SHM_OPEN_FATAL",
+                  "dpi_shared_memory_open() failed. Server not running?")
     end
     `uvm_info(get_full_name(),
               $sformatf("SHM_OK: shared memory opened, fd=%0d", fd),
@@ -152,13 +154,13 @@ class stress_test extends uvm_test;
         end
 
         DPI_ERROR: begin
-          `uvm_fatal("READ_FATAL",
-                     "dpi_read_data() returned DPI_ERROR. Connection lost.")
+          `uvm_fatal ("READ_FATAL",
+                      "dpi_read_data() returned DPI_ERROR. Connection lost.")
         end
 
         default: begin
-          `uvm_fatal("READ_FATAL",
-                     $sformatf("Unknown DPI result code: %0d", status))
+          `uvm_fatal ("READ_FATAL",
+                      $sformatf("Unknown DPI result code: %0d", status))
         end
       endcase
 
@@ -186,7 +188,7 @@ class stress_test extends uvm_test;
     `uvm_info(get_full_name(),
               $sformatf("DONE: received %0d packets, %0d empty polls",
                         received_count, empty_count),
-              UVM_LOW)
+              UVM_MEDIUM)
 
     phase.drop_objection(this);
   endtask : run_phase
@@ -202,8 +204,8 @@ class stress_test extends uvm_test;
     if (fd >= 0) begin
       rc = dpi_shared_memory_close(fd);
       if (rc != 0)
-        `uvm_warning("SHM_CLOSE",
-                     $sformatf("close(fd=%0d) returned %0d", fd, rc))
+        `uvm_warning ("SHM_CLOSE",
+                      $sformatf("close(fd=%0d) returned %0d", fd, rc))
       else
         `uvm_info("SHM_CLEAN",
                   $sformatf("Shared memory fd=%0d closed", fd),
@@ -222,9 +224,9 @@ class stress_test extends uvm_test;
 
     super.report_phase(phase);
 
-    is_success = (received_count == num_transactions) &&
-                 (sequence_errors == 0) &&
-                 (data_errors == 0);
+    is_success =(received_count == num_transactions) &&
+                (sequence_errors == 0) &&
+                (data_errors == 0);
 
     // Populate the string queue
     msg.push_back("========================================");
@@ -246,7 +248,7 @@ class stress_test extends uvm_test;
     end
 
     if (is_success)
-      `uvm_info("STRESS_RESULT", final_report, UVM_NONE)
+      `uvm_info("STRESS_RESULT", final_report, UVM_MEDIUM)
     else
       `uvm_error("STRESS_RESULT", final_report)
   endfunction : report_phase
