@@ -38,7 +38,8 @@ using std::endl;
     DPI_BUFFER_EMPTY = 2,
     DPI_BUFFER_FULL  = 3,
     DPI_TIMEOUT      = 4,
-    DPI_PEER_GONE    = 5
+    DPI_PEER_GONE    = 5,
+    DPI_STREAM_END   = 6
   };
 
 int shared_memory_open(void);
@@ -365,8 +366,9 @@ int close_shared_memory_fd(int fd);
   // Blocking burst read over a persistent channel: waits event-driven (futex,
   // host-side — no simulation time involved) until at least one packet is
   // available or timeout_us expires, then drains up to max_count packets.
-  // Returns DPI_SUCCESS (*out_count >= 1), DPI_TIMEOUT, DPI_PEER_GONE
-  // (registered producer process died) or DPI_ERROR.
+  // Returns DPI_SUCCESS (*out_count >= 1), DPI_STREAM_END (producer marked
+  // EOF and the ring is drained), DPI_TIMEOUT, DPI_PEER_GONE (registered
+  // producer process died) or DPI_ERROR.
   template <typename T>
   int read_burst(ShmChannel<SIZE, T>& channel, T* out, int max_count,
                  int* out_count, uint64_t timeout_us) {
@@ -391,6 +393,10 @@ int close_shared_memory_fd(int fd);
         *out_count = drained;
         return DPI_SUCCESS;
       }
+
+      // Ring is empty and the producer marked EOF - clean end of stream
+      if (ring_buffer->stream_done_flag())
+        return DPI_STREAM_END;
 
       const uint64_t now = monotonic_us();
       if (now >= deadline)

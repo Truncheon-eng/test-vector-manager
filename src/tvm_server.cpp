@@ -113,6 +113,9 @@
       i += n;
     }
 
+    // Signal EOF to the consumer: no more packets will be produced
+    channel.ring()->mark_stream_done();
+
     cout << "Generated:   " << generated << endl
         << "Written:     " << written << endl
         << "Bursts:      " << burst_count << endl

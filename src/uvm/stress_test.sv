@@ -138,6 +138,16 @@ class stress_test extends uvm_test;
     while (received_count < num_transactions) begin
       status = dpi_read_burst(fd, read_timeout_us, burst_max, staged);
 
+      // Producer finished and the ring is drained: clean end of stream.
+      // The report verdict (received vs requested) decides pass/fail.
+      if (status == DPI_STREAM_END) begin
+        `uvm_info(get_full_name(),
+                  $sformatf("STREAM_END: producer finished, received %0d of %0d packets",
+                            received_count, num_transactions),
+                  UVM_LOW)
+        break;
+      end
+
       if (status != DPI_SUCCESS) begin
         case (status)
         DPI_TIMEOUT: begin

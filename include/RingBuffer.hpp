@@ -33,9 +33,10 @@ private:
     alignas(64) std::atomic<size_t> read_count;
     std::atomic<uint32_t> data_wait;   // consumer waits here when ring is empty
 
-    // Control cache line: process registration for liveness detection
+    // Control cache line: process registration + stream state
     alignas(64) std::atomic<int32_t> producer_pid;
     std::atomic<int32_t> consumer_pid;
+    std::atomic<uint32_t> stream_done;  // producer EOF marker
 
     size_t mask = SIZE - 1;
 
@@ -48,10 +49,10 @@ private:
     static_assert(std::atomic<uint32_t>::is_always_lock_free,
                   "futex words must be lock-free to be shared across processes");
 
-    // Bumped from 0xdeadbeef: layout v3 (futex words, pid control line,
-    // cache-line alignment), stale segments from older builds must fail the
-    // magic check
-    static constexpr uint32_t magic_value = 0xdeadc0df;
+    // Bumped from 0xdeadbeef: layout v4 (futex words, pid control line,
+    // stream_done EOF marker, cache-line alignment), stale segments from
+    // older builds must fail the magic check
+    static constexpr uint32_t magic_value = 0xdeadc0e0;
     uint32_t magic;
 
     inline RingBuffer():
@@ -61,6 +62,7 @@ private:
         data_wait{0},
         producer_pid{0},
         consumer_pid{0},
+        stream_done{0},
         magic{magic_value} {}
 
     inline int is_empty() {
@@ -177,6 +179,21 @@ private:
 
     inline int32_t consumer() const {
       return consumer_pid.load(std::memory_order_acquire);
+    }
+
+    // --------------------------------------------------------
+    // Stream lifecycle (graceful EOF)
+    // --------------------------------------------------------
+
+    // Producer: mark end of stream - no more packets will be produced.
+    // Wakes a consumer blocked in wait_for_data so it sees the EOF promptly.
+    inline void mark_stream_done() {
+      stream_done.store(1, std::memory_order_release);
+      notify_data();
+    }
+
+    inline int stream_done_flag() const {
+      return stream_done.load(std::memory_order_acquire);
     }
   };
 
