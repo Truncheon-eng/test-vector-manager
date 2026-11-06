@@ -16,17 +16,32 @@
     constexpr int BURST_MAX = 256;  // packets per write_burst call (ring holds SIZE=1024)
 
     uint64_t count = NUM_TRANSACTIONS;
+    uint64_t pps   = 0;  // packets per second; 0 = max rate
 
     if (argc > 1) {
       char* end = nullptr;
       unsigned long long value = strtoull(argv[1], &end, 10);
 
       if (end == argv[1] || *end != '\0' || value == 0) {
-        std::cerr << "usage: " << argv[0] << " [num_transactions]" << std::endl;
+        std::cerr << "usage: " << argv[0]
+                  << " [num_transactions] [packets_per_second]" << std::endl;
         return EXIT_FAILURE;
       }
 
-      count = value;
+        count = value;
+    }
+
+    if (argc > 2) {
+      char* end = nullptr;
+      unsigned long long value = strtoull(argv[2], &end, 10);
+
+      if (end == argv[2] || *end != '\0') {
+        std::cerr << "usage: " << argv[0]
+                  << " [num_transactions] [packets_per_second]" << std::endl;
+        return EXIT_FAILURE;
+      }
+
+      pps = value;  // 0 = max rate
     }
 
     uint16_t lfsr_state = LFSR_SEED;
@@ -71,6 +86,8 @@
 
     std::vector<test_packet_t> stage(BURST_MAX);
 
+    const uint64_t start_us = monotonic_us();
+
     uint64_t i = 0;
     while (i < count) {
       // Generate a batch into the staging buffer
@@ -111,6 +128,15 @@
 
       written += sent;
       i += n;
+
+      // Open-loop pacing against a deadline schedule (no cumulative drift)
+      if (pps > 0) {
+        const uint64_t target_us = start_us + (i * 1000000ULL) / pps;
+        const uint64_t now_us    = monotonic_us();
+
+        if (target_us > now_us)
+          sleep_us(target_us - now_us);
+      }
     }
 
     // Signal EOF to the consumer: no more packets will be produced
