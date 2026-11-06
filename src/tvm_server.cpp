@@ -82,10 +82,10 @@
         }
 
         if (w == 0) {
-          // Ring is full: back off (host sleep) so the consumer can drain it
-          // without contending on flock; a bare yield() here storms the lock
+          // Ring is full: block on the futex until the consumer frees slots
+          // (event-driven, no backoff polling)
           full_count++;
-          sleep_us(20);
+          channel.ring()->wait_for_space();
           continue;
         }
 

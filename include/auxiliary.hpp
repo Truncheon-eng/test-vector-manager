@@ -348,16 +348,19 @@ int close_shared_memory_fd(int fd);
            ring_buffer->write_data(values[written]) == EXIT_SUCCESS)
       written++;
 
+    if (written > 0)
+      ring_buffer->notify_data();  // wake the consumer waiting for data
+
     return written;
   }
 
-  // Blocking burst read over a persistent channel: waits host-side (no
-  // simulation time involved) until at least one packet is available or
-  // timeout_us expires, then drains up to max_count packets.
+  // Blocking burst read over a persistent channel: waits event-driven (futex,
+  // host-side — no simulation time involved) until at least one packet is
+  // available or timeout_us expires, then drains up to max_count packets.
   // Returns DPI_SUCCESS (*out_count >= 1), DPI_TIMEOUT or DPI_ERROR.
   template <typename T>
   int read_burst(ShmChannel<SIZE, T>& channel, T* out, int max_count,
-                 int* out_count, uint64_t timeout_us, uint64_t poll_us = 50) {
+                 int* out_count, uint64_t timeout_us) {
     if (!channel.valid() || out == nullptr || out_count == nullptr || max_count <= 0)
       return DPI_ERROR;
 
@@ -375,14 +378,22 @@ int close_shared_memory_fd(int fd);
         drained++;
 
       if (drained > 0) {
+        ring_buffer->notify_space();  // wake the producer waiting for space
         *out_count = drained;
         return DPI_SUCCESS;
       }
 
-      if (monotonic_us() >= deadline)
+      const uint64_t now = monotonic_us();
+      if (now >= deadline)
         return DPI_TIMEOUT;
 
-      sleep_us(poll_us);
+      // Event-driven wait bounded by the remaining timeout
+      const uint64_t remain_us = deadline - now;
+      struct timespec ts;
+      ts.tv_sec  = static_cast<time_t>(remain_us / 1000000ULL);
+      ts.tv_nsec = static_cast<long>((remain_us % 1000000ULL) * 1000ULL);
+
+      ring_buffer->wait_for_data(&ts);
     }
   }
 
