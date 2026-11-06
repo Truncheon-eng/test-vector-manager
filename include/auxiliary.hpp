@@ -37,7 +37,8 @@ using std::endl;
     DPI_ERROR        = 1,
     DPI_BUFFER_EMPTY = 2,
     DPI_BUFFER_FULL  = 3,
-    DPI_TIMEOUT      = 4
+    DPI_TIMEOUT      = 4,
+    DPI_PEER_GONE    = 5
   };
 
 int shared_memory_open(void);
@@ -362,7 +363,8 @@ int close_shared_memory_fd(int fd);
   // Blocking burst read over a persistent channel: waits event-driven (futex,
   // host-side — no simulation time involved) until at least one packet is
   // available or timeout_us expires, then drains up to max_count packets.
-  // Returns DPI_SUCCESS (*out_count >= 1), DPI_TIMEOUT or DPI_ERROR.
+  // Returns DPI_SUCCESS (*out_count >= 1), DPI_TIMEOUT, DPI_PEER_GONE
+  // (registered producer process died) or DPI_ERROR.
   template <typename T>
   int read_burst(ShmChannel<SIZE, T>& channel, T* out, int max_count,
                  int* out_count, uint64_t timeout_us) {
@@ -392,8 +394,17 @@ int close_shared_memory_fd(int fd);
       if (now >= deadline)
         return DPI_TIMEOUT;
 
-      // Event-driven wait bounded by the remaining timeout
-      const uint64_t remain_us = deadline - now;
+      // Producer died? Do not wait for data that will never arrive
+      if (!process_alive(ring_buffer->producer()))
+        return DPI_PEER_GONE;
+
+      // Event-driven wait bounded by the remaining timeout, capped by a
+      // liveness tick so a producer death is noticed even without wakeups
+      uint64_t remain_us = deadline - now;
+      constexpr uint64_t liveness_tick_us = 250000;
+      if (remain_us > liveness_tick_us)
+        remain_us = liveness_tick_us;
+
       struct timespec ts;
       ts.tv_sec  = static_cast<time_t>(remain_us / 1000000ULL);
       ts.tv_nsec = static_cast<long>((remain_us % 1000000ULL) * 1000ULL);

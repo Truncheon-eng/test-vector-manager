@@ -30,6 +30,10 @@
       if (!channel->valid())
         return nullptr;
 
+      // Register for liveness detection: a blocked producer notices this
+      // process' death instead of waiting forever
+      channel->ring()->register_consumer(getpid());
+
       ShmChannel<SIZE, test_packet_t>* raw = channel.get();
       channels.emplace(fd, std::move(channel));
       return raw;

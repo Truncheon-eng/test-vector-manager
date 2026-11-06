@@ -12,7 +12,8 @@ package tvm_types_pkg;
     DPI_ERROR        = 1,
     DPI_BUFFER_EMPTY = 2,
     DPI_BUFFER_FULL  = 3,
-    DPI_TIMEOUT      = 4
+    DPI_TIMEOUT      = 4,
+    DPI_PEER_GONE    = 5
   } dpi_result_e;
 
   typedef bit [15:0]       lfsr_state_t;     // LFSR states and payloads

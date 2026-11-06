@@ -5,6 +5,7 @@
 #include <cerrno>
 #include <cstdint>
 #include <linux/futex.h>
+#include <signal.h>
 #include <sys/syscall.h>
 #include <time.h>
 #include <unistd.h>
@@ -36,6 +37,19 @@ inline int futex_wake(std::atomic<uint32_t>* word, int max_wake = 1) {
         nullptr,
         0
     ));
+}
+
+// Liveness probe for pids registered in shared memory.
+// pid <= 0 means "not registered" and is treated as alive (nothing to check).
+// Note: a recycled pid would pass the probe - acceptable for this tool.
+inline bool process_alive(int32_t pid) {
+    if (pid <= 0)
+        return true;
+
+    if (kill(pid, 0) == 0)
+        return true;
+
+    return errno != ESRCH;  // EPERM: exists, owned by another user
 }
 
 #endif

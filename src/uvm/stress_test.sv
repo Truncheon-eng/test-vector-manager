@@ -140,11 +140,17 @@ class stress_test extends uvm_test;
 
       if (status != DPI_SUCCESS) begin
         case (status)
-          DPI_TIMEOUT: begin
-            `uvm_fatal ("READ_TIMEOUT",
-                        $sformatf("No packets in %0dus: received %0d of %0d. Is the server running?",
-                                  read_timeout_us, received_count, num_transactions))
-          end
+        DPI_TIMEOUT: begin
+          `uvm_fatal ("READ_TIMEOUT",
+                      $sformatf("No packets in %0dus: received %0d of %0d. Is the server running?",
+                                read_timeout_us, received_count, num_transactions))
+        end
+
+        DPI_PEER_GONE: begin
+          `uvm_fatal ("PEER_GONE",
+                      $sformatf("Producer process gone: received %0d of %0d packets",
+                                received_count, num_transactions))
+        end
 
           DPI_ERROR: begin
             `uvm_fatal ("READ_FATAL",

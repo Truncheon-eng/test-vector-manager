@@ -58,6 +58,10 @@
       return EXIT_FAILURE;
     }
 
+    // Register for liveness detection: a blocked producer notices a dead
+    // consumer instead of waiting forever
+    channel.ring()->register_producer(getpid());
+
     std::vector<test_packet_t> stage(BURST_MAX);
 
     uint64_t i = 0;
@@ -83,9 +87,14 @@
 
         if (w == 0) {
           // Ring is full: block on the futex until the consumer frees slots
-          // (event-driven, no backoff polling)
+          // (event-driven; wakes periodically to check consumer liveness)
           full_count++;
-          channel.ring()->wait_for_space();
+          if (channel.ring()->wait_for_space() != 0) {
+            std::cerr << "[x]: consumer process is gone - aborting at packet "
+                      << (i + sent) << std::endl;
+            close_shared_memory_fd(fd);
+            return EXIT_FAILURE;
+          }
           continue;
         }
 

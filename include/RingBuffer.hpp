@@ -33,6 +33,10 @@ private:
     alignas(64) std::atomic<size_t> read_count;
     std::atomic<uint32_t> data_wait;   // consumer waits here when ring is empty
 
+    // Control cache line: process registration for liveness detection
+    alignas(64) std::atomic<int32_t> producer_pid;
+    std::atomic<int32_t> consumer_pid;
+
     size_t mask = SIZE - 1;
 
   public:
@@ -44,9 +48,10 @@ private:
     static_assert(std::atomic<uint32_t>::is_always_lock_free,
                   "futex words must be lock-free to be shared across processes");
 
-    // Bumped from 0xdeadbeef: layout v2 (futex words + cache-line alignment),
-    // stale segments from older builds must fail the magic check
-    static constexpr uint32_t magic_value = 0xdeadc0de;
+    // Bumped from 0xdeadbeef: layout v3 (futex words, pid control line,
+    // cache-line alignment), stale segments from older builds must fail the
+    // magic check
+    static constexpr uint32_t magic_value = 0xdeadc0df;
     uint32_t magic;
 
     inline RingBuffer():
@@ -54,6 +59,8 @@ private:
         space_wait{0},
         read_count{0},
         data_wait{0},
+        producer_pid{0},
+        consumer_pid{0},
         magic{magic_value} {}
 
     inline int is_empty() {
@@ -125,15 +132,51 @@ private:
       }
     }
 
-    // Producer: block while the ring is full (forever; caller loops).
-    // If the consumer dies, this never returns - same semantics as the
-    // previous yield/sleep backoff, but without burning CPU.
-    inline void wait_for_space() {
-      space_wait.store(1, std::memory_order_relaxed);
-      std::atomic_thread_fence(std::memory_order_seq_cst);
-      if (is_full())
-        futex_wait(&space_wait, 1, nullptr);
-      space_wait.store(0, std::memory_order_relaxed);
+    // Producer: block while the ring is full, waking up every tick_us to
+    // re-check the registered consumer's liveness.
+    // Returns 0 when space may be available, -1 when the consumer process
+    // is gone. A consumer that has not registered yet (pid 0) is assumed
+    // alive, so a producer may safely wait for a late consumer.
+    inline int wait_for_space(uint64_t tick_us = 250000) {
+      while (true) {
+        space_wait.store(1, std::memory_order_relaxed);
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+
+        if (!is_full()) {
+          space_wait.store(0, std::memory_order_relaxed);
+          return 0;
+        }
+
+        if (!process_alive(consumer())) {
+          space_wait.store(0, std::memory_order_relaxed);
+          return -1;
+        }
+
+        struct timespec ts;
+        ts.tv_sec  = static_cast<time_t>(tick_us / 1000000ULL);
+        ts.tv_nsec = static_cast<long>((tick_us % 1000000ULL) * 1000ULL);
+        futex_wait(&space_wait, 1, &ts);
+        space_wait.store(0, std::memory_order_relaxed);
+      }
+    }
+
+    // --------------------------------------------------------
+    // Process registration (liveness detection)
+    // --------------------------------------------------------
+    inline void register_producer(int32_t pid) {
+      producer_pid.store(pid, std::memory_order_release);
+    }
+
+    inline void register_consumer(int32_t pid) {
+      consumer_pid.store(pid, std::memory_order_release);
+    }
+
+    inline int32_t producer() const {
+      return producer_pid.load(std::memory_order_acquire);
+    }
+
+    inline int32_t consumer() const {
+      return consumer_pid.load(std::memory_order_acquire);
     }
   };
 
