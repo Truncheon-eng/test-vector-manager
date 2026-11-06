@@ -91,7 +91,8 @@ make distclean   # + uvm-verilator/
 ```
 ├── include/               # C++ заголовки TVM (ring, channel, futex, lfsr, packet)
 ├── src/                   # C demo (слой 1) + C++ TVM: сервер, DPI-обёртка
-│   └── uvm/               # SV: tvm_types_pkg, stress_test, tvm_test_pkg, топ
+│   └── uvm/               # SV: types/DPI-пакет, transaction, config,
+│                          #     monitor, refmodel, scoreboard, env, test, топ
 ├── hdr/                   # заголовки C demo
 ├── uvm-verilator/         # UVM-библиотека (клонируется make uvm_download)
 ├── next_task/             # отдельная песочница: UVM RAL tutorial, easyUVM
