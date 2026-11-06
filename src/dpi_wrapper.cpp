@@ -35,11 +35,25 @@
       int rc = read_data<test_packet_t>(fd, &packet);
 
       if (rc != DPI_SUCCESS)
-          return rc;
+        return rc;
 
       *seq  = packet.seq;
       *data = static_cast<uint32_t>(packet.data);
 
       return DPI_SUCCESS;
+    }
+
+    int dpi_write_data(
+      int fd,
+      uint64_t seq,
+      uint32_t data
+    )
+    {
+      test_packet_t packet{};
+
+      packet.seq  = seq;
+      packet.data = static_cast<uint16_t>(data);
+
+      return write_data<test_packet_t>(fd, packet);
     }
 }

@@ -21,6 +21,10 @@ package tvm_types_pkg;
   // DPI-C imports (implemented in src/dpi_wrapper.cpp)
   import "DPI-C" context function int dpi_shared_memory_open();
   import "DPI-C" context function int dpi_shared_memory_close(input int fd);
+  import "DPI-C" context function int dpi_write_data (int            fd,
+                                                      stat_counter_t seq,
+                                                      int unsigned   data
+  );
   import "DPI-C" context function int dpi_read_data(input  int            fd,
                                                     output stat_counter_t seq,
                                                     output int unsigned   data
