@@ -30,6 +30,9 @@ MAKEFLAGS += --no-print-directory -j$(NPROC)
 # Количество транзакций для стресс-теста (сервер и UVM)
 N ?= 1000
 
+# Дополнительные плюсарги симуляции (переопределяется: make UVM_PLUSARGS="...")
+UVM_PLUSARGS ?= +UVM_NO_RELNOTES
+
 # ============================================================
 # Linker selection (auto-detect: mold -> lld -> gold)
 # ============================================================
@@ -171,7 +174,7 @@ $(UVM_BIN): $(UVM_MARKER) $(UVM_SV_ALL) $(DPI_SRCS) $(TVM_HPPS) $(firstword $(MA
 
 uvm_run: uvm_build
 	@echo ">>> [run] NUM_TRANSACTIONS=$(N)"
-	$(UVM_BIN) +NUM_TRANSACTIONS=$(N)
+	$(UVM_BIN) +NUM_TRANSACTIONS=$(N) $(UVM_PLUSARGS)
 
 # ------------------------------------------------------------
 # One-shot stress run: server (background) + sim + cleanup.
@@ -182,7 +185,7 @@ uvm_stress: uvm_build $(TVM_SERVER)
 	@rm -f $(SHM_FILE); \
 	$(TVM_SERVER) $(N) > $(UVM_OUT)/tvm_server.log 2>&1 & \
 	sleep 0.3; \
-	$(UVM_BIN) +NUM_TRANSACTIONS=$(N) | tee $(UVM_OUT)/sim.log; \
+	$(UVM_BIN) +NUM_TRANSACTIONS=$(N) $(UVM_PLUSARGS) | tee $(UVM_OUT)/sim.log; \
 	wait; \
 	echo ">>> [stress] server log:"; \
 	cat $(UVM_OUT)/tvm_server.log; \
