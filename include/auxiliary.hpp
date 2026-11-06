@@ -256,22 +256,6 @@ int close_shared_memory_fd(int fd);
   }
 
 
-  // Monotonic clock in microseconds for host-side waits
-  inline uint64_t monotonic_us() {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return static_cast<uint64_t>(ts.tv_sec) * 1000000ULL +
-           static_cast<uint64_t>(ts.tv_nsec) / 1000ULL;
-  }
-
-  inline void sleep_us(uint64_t us) {
-    struct timespec ts;
-    ts.tv_sec  = static_cast<time_t>(us / 1000000ULL);
-    ts.tv_nsec = static_cast<long>((us % 1000000ULL) * 1000ULL);
-    while (nanosleep(&ts, &ts) == -1 && errno == EINTR) {
-    }
-  }
-
   // Blocking burst read: waits on the host side (no simulation time involved)
   // until at least one packet is available or timeout_us expires, then drains
   // up to max_count packets with a single flock/mmap cycle.
@@ -340,9 +324,7 @@ int close_shared_memory_fd(int fd);
   // Persistent-channel variants: lock-free SPSC, no flock, no per-call mmap
   // Contract: one producer process (write_burst) + one consumer process
   // (read_burst) sharing the channel's ring.
-  // ============================================================
-
-  // Burst write over a persistent channel.
+  // ============================================================  // Burst write over a persistent channel.
   // Returns the number of packets written (may be less than max_count if the
   // ring became full) or -1 on error.
   template <typename T>

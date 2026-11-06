@@ -24,7 +24,8 @@
 
       if (end == argv[1] || *end != '\0' || value == 0) {
         std::cerr << "usage: " << argv[0]
-                  << " [num_transactions] [packets_per_second]" << std::endl;
+                  << " [num_transactions] [packets_per_second] [consumer_grace_s]"
+                  << std::endl;
         return EXIT_FAILURE;
       }
 
@@ -37,11 +38,31 @@
 
       if (end == argv[2] || *end != '\0') {
         std::cerr << "usage: " << argv[0]
-                  << " [num_transactions] [packets_per_second]" << std::endl;
+                  << " [num_transactions] [packets_per_second] [consumer_grace_s]"
+                  << std::endl;
         return EXIT_FAILURE;
       }
 
       pps = value;  // 0 = max rate
+    }
+
+    // How long to wait for the FIRST consumer to attach when the ring is
+    // full; 0 = wait forever. A registered consumer is never timed out -
+    // only its death (liveness check) aborts the producer.
+    uint64_t grace_us = 30ULL * 1000000ULL;
+
+    if (argc > 3) {
+      char* end = nullptr;
+      unsigned long long value = strtoull(argv[3], &end, 10);
+
+      if (end == argv[3] || *end != '\0') {
+        std::cerr << "usage: " << argv[0]
+                  << " [num_transactions] [packets_per_second] [consumer_grace_s]"
+                  << std::endl;
+        return EXIT_FAILURE;
+      }
+
+      grace_us = value * 1000000ULL;
     }
 
     uint16_t lfsr_state = LFSR_SEED;
@@ -113,9 +134,13 @@
           // Ring is full: block on the futex until the consumer frees slots
           // (event-driven; wakes periodically to check consumer liveness)
           full_count++;
-          if (channel.ring()->wait_for_space() != 0) {
-            std::cerr << "[x]: consumer process is gone - aborting at packet "
-                      << (i + sent) << std::endl;
+          const int wait_rc = channel.ring()->wait_for_space(250000, grace_us);
+
+          if (wait_rc != 0) {
+            std::cerr << "[x]: "
+                      << (wait_rc == -2 ? "no consumer attached within grace period"
+                                        : "consumer process is gone")
+                      << " - aborting at packet " << (i + sent) << std::endl;
             close_shared_memory_fd(fd);
             return EXIT_FAILURE;
           }

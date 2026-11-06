@@ -8,6 +8,7 @@
 #include <cstdint>
 
 #include "Futex.hpp"
+#include "MonotonicClock.hpp"
 
 // Lock-free SPSC ring buffer shared between two processes via mmap.
 // Safety contract: exactly ONE producer (write_data) and ONE consumer
@@ -136,10 +137,13 @@ private:
 
     // Producer: block while the ring is full, waking up every tick_us to
     // re-check the registered consumer's liveness.
-    // Returns 0 when space may be available, -1 when the consumer process
-    // is gone. A consumer that has not registered yet (pid 0) is assumed
-    // alive, so a producer may safely wait for a late consumer.
-    inline int wait_for_space(uint64_t tick_us = 250000) {
+    // Returns 0 when space may be available,
+    //        -1 when the registered consumer process is gone,
+    //        -2 when no consumer attached within grace_us (grace_us == 0
+    //           means wait forever - a late consumer is still accepted).
+    inline int wait_for_space(uint64_t tick_us = 250000, uint64_t grace_us = 0) {
+      const uint64_t start_us = monotonic_us();
+
       while (true) {
         space_wait.store(1, std::memory_order_relaxed);
         std::atomic_thread_fence(std::memory_order_seq_cst);
@@ -152,6 +156,12 @@ private:
         if (!process_alive(consumer())) {
           space_wait.store(0, std::memory_order_relaxed);
           return -1;
+        }
+
+        if (grace_us > 0 && consumer() == 0 &&
+            monotonic_us() - start_us >= grace_us) {
+          space_wait.store(0, std::memory_order_relaxed);
+          return -2;
         }
 
         struct timespec ts;
