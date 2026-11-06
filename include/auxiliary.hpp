@@ -328,7 +328,9 @@ int close_shared_memory_fd(int fd);
 
 
   // ============================================================
-  // Persistent-channel variants: flock only, no per-call mmap/munmap
+  // Persistent-channel variants: lock-free SPSC, no flock, no per-call mmap
+  // Contract: one producer process (write_burst) + one consumer process
+  // (read_burst) sharing the channel's ring.
   // ============================================================
 
   // Burst write over a persistent channel.
@@ -338,12 +340,6 @@ int close_shared_memory_fd(int fd);
   int write_burst(ShmChannel<SIZE, T>& channel, const T* values, int max_count) {
     if (!channel.valid() || values == nullptr || max_count <= 0)
       return -1;
-
-    SharedMemoryLock lock(channel.fd());
-    if (!lock.owns_lock()) {
-      perror("flock");
-      return -1;
-    }
 
     RingBuffer<SIZE, T>* ring_buffer = channel.ring();
 
@@ -367,24 +363,16 @@ int close_shared_memory_fd(int fd);
 
     *out_count = 0;
 
+    RingBuffer<SIZE, T>* ring_buffer = channel.ring();
+
     const uint64_t deadline = monotonic_us() + timeout_us;
 
     while (true) {
       int drained = 0;
 
-      {
-        SharedMemoryLock lock(channel.fd());
-        if (!lock.owns_lock()) {
-          perror("flock");
-          return DPI_ERROR;
-        }
-
-        RingBuffer<SIZE, T>* ring_buffer = channel.ring();
-
-        while (drained < max_count &&
-               ring_buffer->read_data(out[drained]) == EXIT_SUCCESS)
-          drained++;
-      }
+      while (drained < max_count &&
+             ring_buffer->read_data(out[drained]) == EXIT_SUCCESS)
+        drained++;
 
       if (drained > 0) {
         *out_count = drained;
