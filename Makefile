@@ -75,6 +75,9 @@ UVM_OUT    := uvm_out
 UVM_BIN    := $(UVM_OUT)/V$(UVM_TOP)
 
 DPI_SRCS   := $(SRC_DIR)/auxiliary.cpp $(SRC_DIR)/dpi_wrapper.cpp
+# UVM DPI runtime (argv/regex/hdl): без него uvm_cmdline_processor не видит
+# плюсарги (+UVM_NO_RELNOTES, +UVM_TESTNAME и пр.)
+UVM_DPI_SRC := $(UVM_DIR)/src/dpi/uvm_dpi.cc
 TVM_SRCS   := $(SRC_DIR)/tvm_server.cpp $(SRC_DIR)/auxiliary.cpp
 TVM_SERVER := $(BIN_DIR)/tvm_server
 TVM_HPPS   := $(wildcard $(INC_DIR)/*.hpp)
@@ -92,6 +95,7 @@ endif
 VFLAGS := \
 	--binary \
 	--timing \
+	--vpi \
 	-j $(NPROC) \
 	-Wno-fatal \
 	-Wno-DECLFILENAME \
@@ -99,7 +103,6 @@ VFLAGS := \
 	-Wno-WIDTHTRUNC \
 	-Wno-UNSIGNED \
 	-Wno-TIMESCALEMOD \
-	+define+UVM_NO_DPI \
 	+define+UVM_REPORT_DISABLE_BANNER \
 	+incdir+$(UVM_DIR)/src \
 	+incdir+$(UVM_SV_DIR) \
@@ -160,10 +163,10 @@ $(UVM_MARKER):
 
 uvm_build: $(UVM_BIN)
 
-$(UVM_BIN): $(UVM_MARKER) $(UVM_SV_ALL) $(DPI_SRCS) $(TVM_HPPS) | $(UVM_OUT)
+$(UVM_BIN): $(UVM_MARKER) $(UVM_SV_ALL) $(DPI_SRCS) $(TVM_HPPS) $(firstword $(MAKEFILE_LIST)) | $(UVM_OUT)
 	@echo ">>> [build] Verilator: jobs=$(NPROC), ld=$(LINKER_DISPLAY)"
 	$(VERILATOR) $(VFLAGS) \
-		$(UVM_DIR)/src/uvm_pkg.sv $(UVM_SV_SRC) $(DPI_SRCS) \
+		$(UVM_DIR)/src/uvm_pkg.sv $(UVM_SV_SRC) $(DPI_SRCS) $(UVM_DPI_SRC) \
 		-CFLAGS "$(CXXFLAGS)"
 
 uvm_run: uvm_build
