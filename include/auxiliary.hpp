@@ -19,6 +19,7 @@
 
 #include "RingBuffer.hpp"
 #include "SharedMemoryLock.hpp"
+#include "ShmChannel.hpp"
 
 #define FILENAME "/tvm_shm"
 #define INFO "[i]:"
@@ -311,6 +312,78 @@ int close_shared_memory_fd(int fd);
           perror("munmap");
           return DPI_ERROR;
         }
+      }
+
+      if (drained > 0) {
+        *out_count = drained;
+        return DPI_SUCCESS;
+      }
+
+      if (monotonic_us() >= deadline)
+        return DPI_TIMEOUT;
+
+      sleep_us(poll_us);
+    }
+  }
+
+
+  // ============================================================
+  // Persistent-channel variants: flock only, no per-call mmap/munmap
+  // ============================================================
+
+  // Burst write over a persistent channel.
+  // Returns the number of packets written (may be less than max_count if the
+  // ring became full) or -1 on error.
+  template <typename T>
+  int write_burst(ShmChannel<SIZE, T>& channel, const T* values, int max_count) {
+    if (!channel.valid() || values == nullptr || max_count <= 0)
+      return -1;
+
+    SharedMemoryLock lock(channel.fd());
+    if (!lock.owns_lock()) {
+      perror("flock");
+      return -1;
+    }
+
+    RingBuffer<SIZE, T>* ring_buffer = channel.ring();
+
+    int written = 0;
+    while (written < max_count &&
+           ring_buffer->write_data(values[written]) == EXIT_SUCCESS)
+      written++;
+
+    return written;
+  }
+
+  // Blocking burst read over a persistent channel: waits host-side (no
+  // simulation time involved) until at least one packet is available or
+  // timeout_us expires, then drains up to max_count packets.
+  // Returns DPI_SUCCESS (*out_count >= 1), DPI_TIMEOUT or DPI_ERROR.
+  template <typename T>
+  int read_burst(ShmChannel<SIZE, T>& channel, T* out, int max_count,
+                 int* out_count, uint64_t timeout_us, uint64_t poll_us = 50) {
+    if (!channel.valid() || out == nullptr || out_count == nullptr || max_count <= 0)
+      return DPI_ERROR;
+
+    *out_count = 0;
+
+    const uint64_t deadline = monotonic_us() + timeout_us;
+
+    while (true) {
+      int drained = 0;
+
+      {
+        SharedMemoryLock lock(channel.fd());
+        if (!lock.owns_lock()) {
+          perror("flock");
+          return DPI_ERROR;
+        }
+
+        RingBuffer<SIZE, T>* ring_buffer = channel.ring();
+
+        while (drained < max_count &&
+               ring_buffer->read_data(out[drained]) == EXIT_SUCCESS)
+          drained++;
       }
 
       if (drained > 0) {

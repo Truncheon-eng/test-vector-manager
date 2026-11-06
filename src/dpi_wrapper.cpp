@@ -1,4 +1,6 @@
 #include <cstdint>
+#include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include "auxiliary.hpp"
@@ -12,6 +14,26 @@
   namespace {
     // Staging buffer for dpi_read_burst / dpi_burst_packet (single-threaded sim)
     std::vector<test_packet_t> burst_buffer;
+
+    // Persistent channels: one mmap per fd, destroyed on dpi_shared_memory_close
+    std::unordered_map<int, std::unique_ptr<ShmChannel<SIZE, test_packet_t>>> channels;
+
+    ShmChannel<SIZE, test_packet_t>* get_channel(int fd) {
+      if (fd < 0)
+        return nullptr;
+
+      auto it = channels.find(fd);
+      if (it != channels.end())
+        return it->second.get();
+
+      auto channel = std::make_unique<ShmChannel<SIZE, test_packet_t>>(fd);
+      if (!channel->valid())
+        return nullptr;
+
+      ShmChannel<SIZE, test_packet_t>* raw = channel.get();
+      channels.emplace(fd, std::move(channel));
+      return raw;
+    }
   }
 
   extern "C" {
@@ -27,6 +49,7 @@
 
     int dpi_shared_memory_close(int fd)
     {
+      channels.erase(fd);  // unmaps the persistent channel
       return close_shared_memory_fd(fd);
     }
 
@@ -76,14 +99,18 @@
 
       *count = 0;
 
+      ShmChannel<SIZE, test_packet_t>* channel = get_channel(fd);
+      if (channel == nullptr)
+        return DPI_ERROR;
+
       if (max_count <= 0 || max_count > SIZE)
         max_count = SIZE;
 
       burst_buffer.resize(max_count);
 
       int staged = 0;
-      int rc = read_burst<test_packet_t>(
-        fd,
+      int rc = read_burst(
+        *channel,
         burst_buffer.data(),
         max_count,
         &staged,

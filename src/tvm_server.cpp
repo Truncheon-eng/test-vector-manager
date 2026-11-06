@@ -50,6 +50,14 @@
 
     clear_ring_buffer<test_packet_t>(fd);
 
+    // Persistent mapping: one mmap for the whole connection
+    ShmChannel<SIZE, test_packet_t> channel(fd);
+    if (!channel.valid()) {
+      std::cerr << "[x]: ShmChannel mapping failed" << std::endl;
+      close_shared_memory_fd(fd);
+      return EXIT_FAILURE;
+    }
+
     std::vector<test_packet_t> stage(BURST_MAX);
 
     uint64_t i = 0;
@@ -65,7 +73,7 @@
       // Flush the batch under a single flock/mmap cycle
       int sent = 0;
       while (sent < n) {
-        int w = write_burst(fd, stage.data() + sent, n - sent);
+        int w = write_burst(channel, stage.data() + sent, n - sent);
 
         if (w < 0) {
           std::cerr << "[x]: write_burst failed at packet " << (i + sent) << std::endl;
