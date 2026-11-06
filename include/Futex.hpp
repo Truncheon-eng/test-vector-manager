@@ -12,7 +12,8 @@
 
 // Thin wrappers over futex(2) for words living in shared memory.
 // NOTE: no FUTEX_PRIVATE_FLAG — the words are shared between processes.
-// Linux-only by design (the flock-based legacy path stays portable).
+// Linux-only by design: RingBuffer.hpp includes this header unconditionally,
+// so the WHOLE TVM IPC layer (including the legacy flock path) is Linux-only.
 
 inline int futex_wait(std::atomic<uint32_t>* word, uint32_t expected,
                       const struct timespec* relative_ts = nullptr) {
