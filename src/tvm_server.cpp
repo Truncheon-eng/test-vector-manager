@@ -167,10 +167,15 @@
     // Signal EOF to the consumer: no more packets will be produced
     channel.ring()->mark_stream_done();
 
+    const double seconds = static_cast<double>(monotonic_us() - start_us) / 1e6;
+
     cout << "Generated:   " << generated << endl
         << "Written:     " << written << endl
         << "Bursts:      " << burst_count << endl
-        << "Buffer full: " << full_count << endl;
+        << "Buffer full: " << full_count << endl
+        << "Elapsed:     " << seconds << " s" << endl
+        << "Throughput:  " << (seconds > 0.0 ? static_cast<double>(written) / seconds : 0.0)
+        << " packets/s" << endl;
 
     close_shared_memory_fd(fd);
 
