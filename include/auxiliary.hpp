@@ -106,6 +106,53 @@ int close_shared_memory_fd(int fd);
   }
 
 
+  // Burst write: writes up to max_count packets under a single flock/mmap
+  // cycle. Returns the number of packets written (may be less than max_count
+  // if the ring became full) or -1 on error.
+  // No msync here: updates to a MAP_SHARED mapping of a shm object are
+  // immediately visible to other processes mapping it (same as the read path).
+  template <typename T>
+  int write_burst(int fd, const T* values, int max_count) {
+    if (fd < 0 || values == nullptr || max_count <= 0)
+      return -1;
+
+    SharedMemoryLock lock(fd);
+    if (!lock.owns_lock()) {
+      perror("flock");
+      return -1;
+    }
+
+    constexpr size_t mapping_size = sizeof(RingBuffer<SIZE, T>);
+    void* data_ptr = mmap(
+      nullptr,
+      mapping_size,
+      PROT_READ | PROT_WRITE,
+      MAP_SHARED,
+      fd,
+      0
+    );
+
+    if (data_ptr == MAP_FAILED) {
+      perror("mmap");
+      return -1;
+    }
+
+    RingBuffer<SIZE, T>* ring_buffer = get_ring_buffer<T>(data_ptr);
+
+    int written = 0;
+    while(written < max_count &&
+          ring_buffer->write_data(values[written]) == EXIT_SUCCESS)
+      written++;
+
+    if (munmap(data_ptr, mapping_size) != 0) {
+      perror("munmap");
+      return -1;
+    }
+
+    return written;
+  }
+
+
   template <typename T>
   int read_data(int fd, T* value) {
     if (fd < 0 || value == nullptr)

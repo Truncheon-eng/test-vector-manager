@@ -1,6 +1,7 @@
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
-#include <thread>
+#include <vector>
 
 #include "auxiliary.hpp"
 #include "lfsr.hpp"
@@ -12,6 +13,8 @@
   }
 
   int main(int argc, char* argv[]) {
+    constexpr int BURST_MAX = 256;  // packets per write_burst call (ring holds SIZE=1024)
+
     uint64_t count = NUM_TRANSACTIONS;
 
     if (argc > 1) {
@@ -23,7 +26,7 @@
         return EXIT_FAILURE;
       }
 
-        count = value;
+      count = value;
     }
 
     uint16_t lfsr_state = LFSR_SEED;
@@ -31,6 +34,7 @@
     uint64_t generated {0};
     uint64_t written {0};
     uint64_t full_count {0};
+    uint64_t burst_count {0};
 
     int fd = shared_memory_open();
     if (fd < 0) {
@@ -46,34 +50,48 @@
 
     clear_ring_buffer<test_packet_t>(fd);
 
-    for (uint64_t i = 0; i < count; i++) {
-      test_packet_t packet;
-      packet.seq  = i;
-      packet.data = lfsr_next(lfsr_state);
-      generated++;
+    std::vector<test_packet_t> stage(BURST_MAX);
 
-      while (true) {
-        int state = write_data(fd, packet);
+    uint64_t i = 0;
+    while (i < count) {
+      // Generate a batch into the staging buffer
+      const int n = static_cast<int>(std::min<uint64_t>(BURST_MAX, count - i));
+      for (int j = 0; j < n; j++) {
+        stage[j].seq  = i + static_cast<uint64_t>(j);
+        stage[j].data = lfsr_next(lfsr_state);
+      }
+      generated += n;
 
-        if (state == DPI_SUCCESS) {
-          written++;
-          break;
-        }
+      // Flush the batch under a single flock/mmap cycle
+      int sent = 0;
+      while (sent < n) {
+        int w = write_burst(fd, stage.data() + sent, n - sent);
 
-        if (state == DPI_ERROR) {
-          std::cerr << "[x]: write_data failed at packet " << i << std::endl;
+        if (w < 0) {
+          std::cerr << "[x]: write_burst failed at packet " << (i + sent) << std::endl;
           close_shared_memory_fd(fd);
           return EXIT_FAILURE;
         }
 
-        // DPI_BUFFER_FULL: ring is full, wait for the consumer to drain it
-        full_count++;
-        std::this_thread::yield();
+        if (w == 0) {
+          // Ring is full: back off (host sleep) so the consumer can drain it
+          // without contending on flock; a bare yield() here storms the lock
+          full_count++;
+          sleep_us(20);
+          continue;
+        }
+
+        sent += w;
+        burst_count++;
       }
+
+      written += sent;
+      i += n;
     }
 
     cout << "Generated:   " << generated << endl
         << "Written:     " << written << endl
+        << "Bursts:      " << burst_count << endl
         << "Buffer full: " << full_count << endl;
 
     close_shared_memory_fd(fd);
