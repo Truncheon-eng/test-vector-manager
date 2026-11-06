@@ -79,6 +79,10 @@ TVM_SRCS   := $(SRC_DIR)/tvm_server.cpp $(SRC_DIR)/auxiliary.cpp
 TVM_SERVER := $(BIN_DIR)/tvm_server
 TVM_HPPS   := $(wildcard $(INC_DIR)/*.hpp)
 
+TEST_DIR := test
+TEST_SRC := $(TEST_DIR)/tvm_loopback.cpp
+TEST_BIN := $(BIN_DIR)/tvm_loopback
+
 ifneq ($(strip $(LDFLAGS)),)
   VFLAGS_LDFLAGS := -LDFLAGS "$(LDFLAGS)"
 else
@@ -106,7 +110,7 @@ VFLAGS := \
 # ============================================================
 # Main Targets
 # ============================================================
-.PHONY: all tvm_server uvm_download uvm_build uvm_run uvm_stress clean distclean list help
+.PHONY: all tvm_server test uvm_download uvm_build uvm_run uvm_stress clean distclean list help
 
 all: $(SERVER) $(CLIENT) $(DESTROY) $(TVM_SERVER)
 
@@ -132,6 +136,15 @@ tvm_server: $(TVM_SERVER)
 
 $(TVM_SERVER): $(TVM_SRCS) $(TVM_HPPS) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(TVM_SRCS) -o $@ $(LDFLAGS)
+
+# ------------------------------------------------------------
+# C++ IPC layer self-test (no UVM/Verilator, runs in <1 s)
+# ------------------------------------------------------------
+test: $(TEST_BIN)
+	@$(TEST_BIN)
+
+$(TEST_BIN): $(TEST_SRC) $(SRC_DIR)/auxiliary.cpp $(TVM_HPPS) | $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $(TEST_SRC) $(SRC_DIR)/auxiliary.cpp -o $@ $(LDFLAGS)
 
 # ------------------------------------------------------------
 # UVM testbench (Verilator + DPI-C)
@@ -212,6 +225,7 @@ help:
 	@echo "Targets:"
 	@echo "  all          - Build C demo binaries + tvm_server (default)"
 	@echo "  tvm_server   - Build TVM packet server (C++)"
+	@echo "  test         - Build and run C++ IPC loopback self-test"
 	@echo "  uvm_download - Clone uvm-verilator repository"
 	@echo "  uvm_build    - Build UVM testbench with Verilator + DPI"
 	@echo "  uvm_run      - Build and run UVM stress test (server separately!)"
