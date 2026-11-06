@@ -62,7 +62,12 @@ UVM_REPO   := https://github.com/chipsalliance/uvm-verilator.git
 UVM_MARKER := .uvm_downloaded
 
 UVM_TOP    := stress_test_top
-UVM_SV_SRC := $(SRC_DIR)/uvm/uvm_testchamber.sv
+UVM_SV_DIR := $(SRC_DIR)/uvm
+# Единицы компиляции в порядке зависимостей (stress_test.sv включается в пакет через `include)
+UVM_SV_SRC := $(UVM_SV_DIR)/tvm_types_pkg.sv \
+              $(UVM_SV_DIR)/tvm_test_pkg.sv \
+              $(UVM_SV_DIR)/uvm_testchamber.sv
+UVM_SV_ALL := $(wildcard $(UVM_SV_DIR)/*.sv)
 UVM_OUT    := uvm_out
 UVM_BIN    := $(UVM_OUT)/V$(UVM_TOP)
 
@@ -90,6 +95,7 @@ VFLAGS := \
 	+define+UVM_NO_DPI \
 	+define+UVM_REPORT_DISABLE_BANNER \
 	+incdir+$(UVM_DIR)/src \
+	+incdir+$(UVM_SV_DIR) \
 	--top-module $(UVM_TOP) \
 	--Mdir $(UVM_OUT) \
 	$(VFLAGS_LDFLAGS)
@@ -138,7 +144,7 @@ $(UVM_MARKER):
 
 uvm_build: $(UVM_BIN)
 
-$(UVM_BIN): $(UVM_MARKER) $(UVM_SV_SRC) $(DPI_SRCS) $(TVM_HPPS) | $(UVM_OUT)
+$(UVM_BIN): $(UVM_MARKER) $(UVM_SV_ALL) $(DPI_SRCS) $(TVM_HPPS) | $(UVM_OUT)
 	@echo ">>> [build] Verilator: jobs=$(NPROC), ld=$(LINKER_DISPLAY)"
 	$(VERILATOR) $(VFLAGS) \
 		$(UVM_DIR)/src/uvm_pkg.sv $(UVM_SV_SRC) $(DPI_SRCS) \
