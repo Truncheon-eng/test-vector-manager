@@ -49,6 +49,15 @@ class tvm_controller extends uvm_component;
                 UVM_LOW)
     end
 
+    // Rate must be configured BEFORE the stream starts
+    if (cfg.stream_rate_pps >= 0) begin
+      status = dpi_ctrl_send(ctrl_fd, CTRL_SET_RATE, cfg.stream_rate_pps);
+      `uvm_info(get_type_name(),
+                $sformatf("SET_RATE pps=%0d status=%0d",
+                          cfg.stream_rate_pps, status),
+                UVM_LOW)
+    end
+
     status = dpi_ctrl_send(ctrl_fd, CTRL_START_STREAM, cfg.num_transactions);
     `uvm_info(get_type_name(),
               $sformatf("START_STREAM n=%0d status=%0d",

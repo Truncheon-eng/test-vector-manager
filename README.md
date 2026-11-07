@@ -32,7 +32,7 @@ bin/tvm_server ──write_burst──► /dev/shm/tvm_shm ──read_burst─�
 | `CTRL_LOAD_VECTORS` | id набора (0..3) | выбрать seed LFSR: `ACE1/BEEF/CAFE/F00D` (таблица зеркальна в `tvm_refmodel.sv`) |
 | `CTRL_SET_RATE` | pps (0 = макс) | изменить темп генерации на лету |
 
-UVM-сторона: компонент `tvm_controller` шлёт `LOAD_VECTORS(+VECTOR_SET=n)` и `START_STREAM` в `start_of_simulation_phase` (строго до run_phase: блокирующий DPI-вызов в Verilator не прерывается другими процессами), `STOP_STREAM` — по завершении сбора. Аргументы сервера: `./bin/tvm_server [N] [pps] [grace_s] [ctrl_wait_s]`; `ctrl_wait_s=0` — стартовать сразу (legacy), по истечении ожидания сервер тоже стартует с argv-значениями.
+UVM-сторона: компонент `tvm_controller` шлёт `LOAD_VECTORS(+VECTOR_SET=n)`, `SET_RATE(+RATE_PPS=n)` и `START_STREAM` в `start_of_simulation_phase` (строго до run_phase: блокирующий DPI-вызов в Verilator не прерывается другими процессами), `STOP_STREAM` — по завершении сбора. Аргументы сервера: `./bin/tvm_server [N] [pps] [grace_s] [ctrl_wait_s]`; `ctrl_wait_s=0` — стартовать сразу (legacy), по истечении ожидания сервер тоже стартует с argv-значениями.
 
 ### Протокол
 
@@ -90,6 +90,7 @@ make uvm_run N=1000000
 | `+BURST_MAX=` | 256 | пакетов на один DPI-burst (≤1024) |
 | `+READ_TIMEOUT_US=` | 10000000 | хост-таймаут ожидания данных |
 | `+VECTOR_SET=` | -1 (не отправлять) | id набора тестовых векторов для `LOAD_VECTORS` |
+| `+RATE_PPS=` | -1 (не отправлять) | темп потока для `SET_RATE` (0 = максимум) |
 | `+UVM_VERBOSITY=` | UVM_MEDIUM | уровень логов UVM |
 
 Итог прогона — дашборд `STRESS_RESULT`: received/errors/resyncs и вердикт SUCCESS/FAILURE.
