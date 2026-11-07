@@ -3,7 +3,7 @@
 
 // ============================================================
 // TVM Reference Model: golden LFSR generator (mirrors the C++
-// server include/lfsr.hpp). Subscribes to the observed stream,
+// server ipc/ipc/include/lfsr.hpp). Subscribes to the observed stream,
 // produces the expected packet for each observed one and
 // publishes it for the scoreboard.
 //
@@ -13,7 +13,7 @@
 class tvm_refmodel extends uvm_component;
   `uvm_component_utils(tvm_refmodel)
 
-  // Golden LFSR seed for vector set 0 (must match the server: include/lfsr.hpp)
+  // Golden LFSR seed for vector set 0 (must match the server: ipc/include/lfsr.hpp)
   const lfsr_state_t LFSR_SEED = 16'hACE1;
 
   tvm_config cfg;
@@ -46,7 +46,7 @@ class tvm_refmodel extends uvm_component;
     reset_model();
   endfunction : build_phase
 
-  // Vector set seeds - mirror of include/ctrl_packet.hpp: vector_set_seed
+  // Vector set seeds - mirror of ipc/include/ctrl_packet.hpp: vector_set_seed
   function automatic lfsr_state_t seed_for_set(int set_id);
     case (set_id)
       1:       return 16'hBEEF;

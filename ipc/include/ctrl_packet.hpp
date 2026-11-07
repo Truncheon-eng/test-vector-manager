@@ -23,7 +23,7 @@
   };  // 16 bytes, trivially copyable, standard layout
 
   // Vector sets shared by the producer and the UVM reference model.
-  // Mirrored in src/uvm/tvm_refmodel.sv: seed_for_set - keep in sync!
+  // Mirrored in uvm/tvm_refmodel.sv: seed_for_set - keep in sync!
   constexpr int NUM_VECTOR_SETS = 4;
 
   inline uint16_t vector_set_seed(int set_id) {

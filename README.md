@@ -23,7 +23,7 @@ bin/tvm_server ──write_burst──► /dev/shm/tvm_shm ──read_burst─�
 
 ### Канал управления (sim → сервер)
 
-Отдельный сегмент `/dev/shm/tvm_ctrl` с тем же SPSC+futex механизмом (роли развёрнуты: sim — продюсер, сервер — консьюмер). Команды (`include/ctrl_packet.hpp`):
+Отдельный сегмент `/dev/shm/tvm_ctrl` с тем же SPSC+futex механизмом (роли развёрнуты: sim — продюсер, сервер — консьюмер). Команды (`ipc/include/ctrl_packet.hpp`):
 
 | Команда | arg | Действие |
 |---|---|---|
@@ -36,9 +36,9 @@ UVM-сторона: компонент `tvm_controller` шлёт `LOAD_VECTORS(+
 
 ### Протокол
 
-- Пакет: `test_packet_t { uint64_t seq; uint16_t data; }` (`include/packet.hpp`);
-- Данные: LFSR 16 бит, полиномиальные отводы 0/2/3/5, seed `0xACE1` (`include/lfsr.hpp`) — идентичная золотая модель на SV-стороне;
-- Кольцо: `RingBuffer<1024, T>` (`include/RingBuffer.hpp`) — lock-free SPSC на атомарных счётчиках с acquire/release, futex-слова для событийных ожиданий, control-линия с PID процессов и флагом `stream_done`;
+- Пакет: `test_packet_t { uint64_t seq; uint16_t data; }` (`ipc/include/packet.hpp`);
+- Данные: LFSR 16 бит, полиномиальные отводы 0/2/3/5, seed `0xACE1` (`ipc/include/lfsr.hpp`) — идентичная золотая модель на SV-стороне;
+- Кольцо: `RingBuffer<1024, T>` (`ipc/include/RingBuffer.hpp`) — lock-free SPSC на атомарных счётчиках с acquire/release, futex-слова для событийных ожиданий, control-линия с PID процессов и флагом `stream_done`;
 - Ожидания: блокирующие вызовы на хост-стороне — симуляционное время не расходуется, `#`-задержек в тестбенче нет.
 
 ### Коды возврата DPI (`DpiResult` / `dpi_result_e`)
@@ -104,11 +104,16 @@ make distclean   # + uvm-verilator/
 ## Структура
 
 ```
-├── include/               # C++ заголовки TVM (ring, channel, futex, lfsr, packet)
-├── src/                   # C demo (слой 1) + C++ TVM: сервер, DPI-обёртка
-│   └── uvm/               # SV: types/DPI-пакет, transaction, config,
-│                          #     monitor, refmodel, scoreboard, env, test, топ
-├── hdr/                   # заголовки C demo
+├── ipc/                   # общая C++ IPC-библиотека
+│   ├── include/           #   заголовки (ring, channel, futex, lfsr, packet, ctrl)
+│   └── auxiliary.cpp      #   shm_open/truncate/unlink
+├── server/                # продюсер: tvm_server.cpp (LFSR-генератор пакетов)
+├── client/                # клиентская сторона: dpi_wrapper.cpp (DPI-мост для sim)
+├── uvm/                   # UVM-окружение: types/DPI-пакет, transaction, config,
+│                          #   controller, monitor, refmodel, scoreboard, env, test, топ
+├── test/                  # тестовые программы: tvm_loopback.cpp (C++ самотест IPC)
+├── demo/                  # слой 1: учебный System V IPC demo (server.c, client.c,
+│                          #   destroy_shm.c, auxiliary_functions.c, shared_memory.h)
 ├── uvm-verilator/         # UVM-библиотека (клонируется make uvm_download)
 ├── next_task/             # отдельная песочница: UVM RAL tutorial, easyUVM
 └── Makefile

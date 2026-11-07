@@ -1,17 +1,23 @@
 # ============================================================
 # Makefile for test-vector-manager
-#   Stage 1: C System V IPC demo (server/client/destroy_shm)
-#   Stage 2: TVM stress infra (C++ server + UVM/Verilator + DPI)
+#   ipc/    - shared C++ IPC library (headers + auxiliary.cpp)
+#   server/ - TVM packet producer (tvm_server.cpp)
+#   client/ - DPI bridge for the sim (dpi_wrapper.cpp)
+#   uvm/    - UVM test environment (SystemVerilog)
+#   test/   - test programs (C++ loopback self-test)
+#   demo/   - stage-1 C System V IPC demo (server/client/destroy_shm)
 # ============================================================
 
 CC      := gcc
 CXX     := g++
 
-SRC_DIR := src
-HDR_DIR := hdr
-INC_DIR := include
-OBJ_DIR := obj
-BIN_DIR := bin
+IPC_DIR  := ipc
+INC_DIR  := ipc/include
+SRV_DIR  := server
+CLI_DIR  := client
+DEMO_DIR := demo
+OBJ_DIR  := obj
+BIN_DIR  := bin
 
 SERVER  := $(BIN_DIR)/server
 CLIENT  := $(BIN_DIR)/client
@@ -54,8 +60,8 @@ endif
 # ============================================================
 # Flags
 # ============================================================
-# -MMD -MP: автозависимости от заголовков (пересборка при изменении hdr/*.h)
-CFLAGS   += -g -Wall -MMD -MP -I$(HDR_DIR)
+# -MMD -MP: автозависимости от заголовков (пересборка при изменении demo/*.h)
+CFLAGS   += -g -Wall -MMD -MP -I$(DEMO_DIR)
 CXXFLAGS += -std=c++17 -O2 -g -I$(CURDIR)/$(INC_DIR)
 
 DEPS := $(wildcard $(OBJ_DIR)/*.d)
@@ -70,7 +76,7 @@ UVM_REPO   := https://github.com/chipsalliance/uvm-verilator.git
 UVM_MARKER := .uvm_downloaded
 
 UVM_TOP    := stress_test_top
-UVM_SV_DIR := $(SRC_DIR)/uvm
+UVM_SV_DIR := uvm
 # Единицы компиляции в порядке зависимостей (stress_test.sv включается в пакет через `include)
 UVM_SV_SRC := $(UVM_SV_DIR)/tvm_types_pkg.sv \
               $(UVM_SV_DIR)/tvm_test_pkg.sv \
@@ -79,11 +85,11 @@ UVM_SV_ALL := $(wildcard $(UVM_SV_DIR)/*.sv)
 UVM_OUT    := uvm_out
 UVM_BIN    := $(UVM_OUT)/V$(UVM_TOP)
 
-DPI_SRCS   := $(SRC_DIR)/auxiliary.cpp $(SRC_DIR)/dpi_wrapper.cpp
+DPI_SRCS   := $(IPC_DIR)/auxiliary.cpp $(CLI_DIR)/dpi_wrapper.cpp
 # UVM DPI runtime (argv/regex/hdl): без него uvm_cmdline_processor не видит
 # плюсарги (+UVM_NO_RELNOTES, +UVM_TESTNAME и пр.)
 UVM_DPI_SRC := $(UVM_DIR)/src/dpi/uvm_dpi.cc
-TVM_SRCS   := $(SRC_DIR)/tvm_server.cpp $(SRC_DIR)/auxiliary.cpp
+TVM_SRCS   := $(SRV_DIR)/tvm_server.cpp $(IPC_DIR)/auxiliary.cpp
 TVM_SERVER := $(BIN_DIR)/tvm_server
 TVM_HPPS   := $(wildcard $(INC_DIR)/*.hpp)
 
@@ -134,7 +140,7 @@ $(CLIENT): $(OBJ_DIR)/client.o $(AUX_OBJ) | $(BIN_DIR)
 $(DESTROY): $(OBJ_DIR)/destroy_shm.o $(AUX_OBJ) | $(BIN_DIR)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
+$(OBJ_DIR)/%.o: $(DEMO_DIR)/%.c | $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # ------------------------------------------------------------
@@ -151,8 +157,8 @@ $(TVM_SERVER): $(TVM_SRCS) $(TVM_HPPS) | $(BIN_DIR)
 test: $(TEST_BIN)
 	@$(TEST_BIN)
 
-$(TEST_BIN): $(TEST_SRC) $(SRC_DIR)/auxiliary.cpp $(TVM_HPPS) | $(BIN_DIR)
-	$(CXX) $(CXXFLAGS) $(TEST_SRC) $(SRC_DIR)/auxiliary.cpp -o $@ $(LDFLAGS)
+$(TEST_BIN): $(TEST_SRC) $(IPC_DIR)/auxiliary.cpp $(TVM_HPPS) | $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $(TEST_SRC) $(IPC_DIR)/auxiliary.cpp -o $@ $(LDFLAGS)
 
 # ------------------------------------------------------------
 # UVM testbench (Verilator + DPI-C)
