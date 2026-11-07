@@ -104,10 +104,10 @@ make distclean   # + uvm-verilator/
 ## Структура
 
 ```
-├── ipc/                   # общая C++ IPC-библиотека
-│   ├── include/           #   заголовки (ring, channel, futex, lfsr, packet, ctrl)
-│   └── auxiliary.cpp      #   shm_open/truncate/unlink
 ├── src/
+│   ├── lib/ipc/           # общая C++ IPC-библиотека
+│   │   ├── include/       #   заголовки (ring, channel, futex, lfsr, packet, ctrl)
+│   │   └── auxiliary.cpp  #   shm_open/truncate/unlink
 │   ├── server/            # продюсер: tvm_server.cpp (LFSR-генератор пакетов)
 │   ├── client/            # клиентская сторона: dpi_wrapper.cpp (DPI-мост для sim)
 │   └── uvm/               # критичные UVM-исходники: types/DPI-пакет, transaction,

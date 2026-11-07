@@ -1,6 +1,6 @@
 # ============================================================
 # Makefile for test-vector-manager
-#   ipc/          - shared C++ IPC library (headers + auxiliary.cpp)
+#   src/lib/ipc/  - shared C++ IPC library (headers + auxiliary.cpp)
 #   src/server/   - TVM packet producer (tvm_server.cpp)
 #   src/client/   - DPI bridge for the sim (dpi_wrapper.cpp)
 #   src/uvm/      - critical UVM env sources (types + env package)
@@ -12,8 +12,8 @@
 CC      := gcc
 CXX     := g++
 
-IPC_DIR  := ipc
-INC_DIR  := ipc/include
+IPC_DIR  := src/lib/ipc
+INC_DIR  := src/lib/ipc/include
 SRV_DIR  := src/server
 CLI_DIR  := src/client
 UVM_ENV_DIR  := src/uvm

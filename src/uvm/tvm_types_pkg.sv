@@ -6,7 +6,7 @@
 // ============================================================
 package tvm_types_pkg;
 
-  // Status codes shared with the C++ side (ipc/include/auxiliary.hpp: DpiResult)
+  // Status codes shared with the C++ side (src/lib/ipc/include/auxiliary.hpp: DpiResult)
   typedef enum int {
     DPI_SUCCESS      = 0,
     DPI_ERROR        = 1,
@@ -21,7 +21,7 @@ package tvm_types_pkg;
   typedef longint unsigned stat_counter_t;   // Simulation counters
   typedef string           report_queue_t[$]; // Report line queues
 
-  // Service commands of the control channel (mirror of ipc/include/ctrl_packet.hpp)
+  // Service commands of the control channel (mirror of src/lib/ipc/include/ctrl_packet.hpp)
   typedef enum int {
     CTRL_NOP          = 0,
     CTRL_START_STREAM = 1,  // arg: packets to stream (0 = producer default)
