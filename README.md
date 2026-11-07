@@ -29,10 +29,12 @@ bin/tvm_server ──write_burst──► /dev/shm/tvm_shm ──read_burst─�
 |---|---|---|
 | `CTRL_START_STREAM` | число пакетов (0 = argv N) | начать поток; до неё сервер ждёт `ctrl_wait_s` |
 | `CTRL_STOP_STREAM` | — | штатно завершить поток и выставить `stream_done` |
-| `CTRL_LOAD_VECTORS` | id набора (0..3) | выбрать seed LFSR: `ACE1/BEEF/CAFE/F00D` (таблица зеркальна в `tvm_refmodel.sv`) |
+| `CTRL_LOAD_VECTORS` | id набора (0..3) | выбрать seed LFSR: `ACE1/BEEF/CAFE/F00D` (таблица зеркальна в `test/uvm_test/lfsr_refmodel.sv`); принимается **только до старта потока**, mid-stream отклоняется |
 | `CTRL_SET_RATE` | pps (0 = макс) | изменить темп генерации на лету |
 
 UVM-сторона: компонент `tvm_controller` шлёт `LOAD_VECTORS(+VECTOR_SET=n)`, `SET_RATE(+RATE_PPS=n)` и `START_STREAM` в `start_of_simulation_phase` (строго до run_phase: блокирующий DPI-вызов в Verilator не прерывается другими процессами), `STOP_STREAM` — по завершении сбора. Аргументы сервера: `./bin/tvm_server [N] [pps] [grace_s] [ctrl_wait_s]`; `ctrl_wait_s=0` — стартовать сразу (legacy), по истечении ожидания сервер тоже стартует с argv-значениями.
+
+**Ограничение: `LOAD_VECTORS` в середине потока отклоняется сервером** (команда логируется, seed не меняется). Причина: мгновенная смена seed рассинхронизирует golden-модель консьюмера — первый пакет после переключения фиксируется как `data_errors` (далее `resync()` подхватывает новое состояние LFSR, каскада нет), но итоговый вердикт становится ложным FAILURE. Честная поддержка требует барьерного протокола смены набора: in-band маркер в потоке данных («со следующего пакета seed = X»), который refmodel применяет без засчёта ошибки; это отдельная задача.
 
 ### Протокол
 

@@ -248,10 +248,11 @@
         }
 
         if (cmd.cmd == CTRL_LOAD_VECTORS) {
-          lfsr_state = vector_set_seed(static_cast<int>(cmd.arg));
-          cout << INFO << " LOAD_VECTORS mid-stream: set " << cmd.arg << " (seed 0x"
-               << std::hex << lfsr_state << std::dec
-               << ") - golden model resync required" << endl;
+          // Rejected: switching the seed mid-stream desynchronizes the
+          // consumer's golden model (see README, "Канал управления").
+          // LOAD_VECTORS is accepted only in the pre-stream command phase.
+          cout << INFO << " LOAD_VECTORS rejected mid-stream (set " << cmd.arg
+               << ") - restart the stream to change vector sets" << endl;
         }
       }
       return false;
