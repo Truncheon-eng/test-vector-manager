@@ -16,6 +16,9 @@ class tvm_monitor extends uvm_monitor;
 
   tvm_config cfg;
 
+  // Wired by the env: service-command channel to the producer
+  tvm_controller ctrl;
+
   // Single reusable transaction: every subscriber consumes it
   // synchronously inside write(), so no per-packet allocation
   // is needed on the observation path
@@ -122,6 +125,10 @@ class tvm_monitor extends uvm_monitor;
         collected++;
       end
     end
+
+    // Tell the producer that no more data is needed (service command)
+    if (ctrl != null)
+      ctrl.stop_stream();
 
     `uvm_info(get_full_name(),
               $sformatf("DONE: collected %0d packets", collected),

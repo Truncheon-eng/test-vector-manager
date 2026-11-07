@@ -10,6 +10,7 @@ class tvm_config extends uvm_object;
   stat_counter_t num_transactions = 1000;
   int            burst_max        = 256;        // packets per DPI burst (ring holds SIZE=1024)
   int            read_timeout_us  = 10_000_000; // host-time wait per burst; server absent => fatal
+  int            vector_set       = -1;         // -1 = producer default; >=0 = LOAD_VECTORS id
 
   function new(string name = "tvm_config");
     super.new(name);
@@ -20,11 +21,12 @@ class tvm_config extends uvm_object;
     void'($value$plusargs("NUM_TRANSACTIONS=%d", num_transactions));
     void'($value$plusargs("BURST_MAX=%d", burst_max));
     void'($value$plusargs("READ_TIMEOUT_US=%d", read_timeout_us));
+    void'($value$plusargs("VECTOR_SET=%d", vector_set));
   endfunction : apply_plusargs
 
   virtual function string convert2string();
-    return $sformatf("NUM_TRANSACTIONS=%0d BURST_MAX=%0d READ_TIMEOUT_US=%0d",
-                     num_transactions, burst_max, read_timeout_us);
+    return $sformatf("NUM_TRANSACTIONS=%0d BURST_MAX=%0d READ_TIMEOUT_US=%0d VECTOR_SET=%0d",
+                     num_transactions, burst_max, read_timeout_us, vector_set);
   endfunction : convert2string
 endclass : tvm_config
 

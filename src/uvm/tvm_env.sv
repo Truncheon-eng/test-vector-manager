@@ -15,6 +15,7 @@
 class tvm_env extends uvm_env;
   `uvm_component_utils(tvm_env)
 
+  tvm_controller ctl;
   tvm_monitor    mon;
   tvm_refmodel   rfm;
   tvm_scoreboard sb;
@@ -25,6 +26,7 @@ class tvm_env extends uvm_env;
 
   virtual function void build_phase(uvm_phase phase);
     super.build_phase(phase);
+    ctl = tvm_controller::type_id::create("ctl", this);
     mon = tvm_monitor::type_id::create("mon", this);
     rfm = tvm_refmodel::type_id::create("rfm", this);
     sb  = tvm_scoreboard::type_id::create("sb", this);
@@ -38,6 +40,10 @@ class tvm_env extends uvm_env;
     mon.item_collected_port.connect(rfm.actual_in);
     mon.item_collected_port.connect(sb.actual_in);
     rfm.expected_out.connect(sb.expected_fifo.analysis_export);
+
+    // Service-command channel: monitor tells the producer to stop
+    // once the requested amount of data has been collected
+    mon.ctrl = ctl;
 
     // Resync feedback path
     sb.refmodel = rfm;

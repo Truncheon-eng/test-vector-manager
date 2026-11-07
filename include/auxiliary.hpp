@@ -44,7 +44,11 @@ using std::endl;
 
 int shared_memory_open(void);
 
+int shared_memory_open_name(const char* name);
+
 int shared_memory_unlink(void);
+
+int shared_memory_unlink_name(const char* name);
 
 int shared_memory_truncate(int fd, size_t size);
 

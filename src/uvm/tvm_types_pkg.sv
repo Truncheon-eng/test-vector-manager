@@ -21,6 +21,15 @@ package tvm_types_pkg;
   typedef longint unsigned stat_counter_t;   // Simulation counters
   typedef string           report_queue_t[$]; // Report line queues
 
+  // Service commands of the control channel (mirror of include/ctrl_packet.hpp)
+  typedef enum int {
+    CTRL_NOP          = 0,
+    CTRL_START_STREAM = 1,  // arg: packets to stream (0 = producer default)
+    CTRL_STOP_STREAM  = 2,  // arg: ignored - finish the stream, mark done
+    CTRL_LOAD_VECTORS = 3,  // arg: vector set id (see tvm_refmodel::seed_for_set)
+    CTRL_SET_RATE     = 4   // arg: packets per second (0 = max rate)
+  } ctrl_cmd_e;
+
   // DPI-C imports (implemented in src/dpi_wrapper.cpp)
   import "DPI-C" context function int dpi_shared_memory_open();
   import "DPI-C" context function int dpi_shared_memory_close(input int fd);
@@ -40,9 +49,16 @@ package tvm_types_pkg;
                                                       output int     count
   );
   // Fetch packet idx from the staging buffer filled by dpi_read_burst
-  import "DPI-C" context function int dpi_burst_packet (int                 idx,
-                                                        output stat_counter_t seq,
-                                                        output int unsigned   data
+  import "DPI-C" context function int dpi_burst_packet(int                 idx,
+                                                       output stat_counter_t seq,
+                                                       output int unsigned   data
+  );
+  // Control channel (sim -> producer): service commands
+  import "DPI-C" context function int dpi_ctrl_open();
+  import "DPI-C" context function int dpi_ctrl_close(input int fd);
+  import "DPI-C" context function int dpi_ctrl_send (int            fd,
+                                                     int            cmd,
+                                                     stat_counter_t arg
   );
 
 endpackage : tvm_types_pkg

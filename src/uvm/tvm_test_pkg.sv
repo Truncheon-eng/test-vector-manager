@@ -15,6 +15,7 @@ package tvm_test_pkg;
 
   `include "tvm_packet.sv"
   `include "tvm_config.sv"
+  `include "tvm_controller.sv"
   `include "tvm_monitor.sv"
   `include "tvm_refmodel.sv"
   `include "tvm_scoreboard.sv"

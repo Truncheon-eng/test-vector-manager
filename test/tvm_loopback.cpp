@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "auxiliary.hpp"
+#include "ctrl_packet.hpp"
 #include "lfsr.hpp"
 #include "packet.hpp"
 
@@ -208,6 +209,52 @@ int main() {
     EXPECT(dt < 1000000, "peer death detected within ~1 tick (<1 s)");
 
     close_shared_memory_fd(fd);
+  }
+
+  // ----------------------------------------------------------
+  // 7. Control channel roundtrip (sim -> producer commands)
+  // ----------------------------------------------------------
+  {
+    EXPECT(shared_memory_unlink_name(CTRL_FILENAME) == 0, "ctrl: unlink stale");
+
+    int fd = shared_memory_open_name(CTRL_FILENAME);
+    EXPECT(fd >= 0, "ctrl: open");
+    EXPECT(shared_memory_truncate(fd, PAGE_SIZE) == 0, "ctrl: truncate");
+
+    ShmChannel<SIZE, ctrl_packet_t> ctrl(fd);
+    EXPECT(ctrl.valid(), "ctrl: channel valid");
+
+    ctrl_packet_t cmds[3];
+    cmds[0] = {CTRL_LOAD_VECTORS, 0, 2};
+    cmds[1] = {CTRL_SET_RATE, 0, 50000};
+    cmds[2] = {CTRL_START_STREAM, 0, 1000};
+
+    EXPECT(write_burst(ctrl, cmds, 3) == 3, "ctrl: write 3 commands");
+
+    ctrl_packet_t got[3];
+    int cnt = 0;
+    int rc = read_burst(ctrl, got, 3, &cnt, 1000000);
+
+    EXPECT(rc == DPI_SUCCESS && cnt == 3, "ctrl: read back 3 commands");
+    EXPECT(got[0].cmd == CTRL_LOAD_VECTORS && got[0].arg == 2,
+           "ctrl: LOAD_VECTORS intact");
+    EXPECT(got[1].cmd == CTRL_SET_RATE && got[1].arg == 50000,
+           "ctrl: SET_RATE intact");
+    EXPECT(got[2].cmd == CTRL_START_STREAM && got[2].arg == 1000,
+           "ctrl: START_STREAM intact");
+
+    // Non-blocking drain on empty control ring
+    rc = read_burst(ctrl, got, 3, &cnt, 0);
+    EXPECT(rc == DPI_TIMEOUT, "ctrl: empty non-blocking -> DPI_TIMEOUT");
+
+    // Seed table consistency (mirror of tvm_refmodel.sv)
+    EXPECT(vector_set_seed(0) == 0xACE1 && vector_set_seed(1) == 0xBEEF &&
+           vector_set_seed(2) == 0xCAFE && vector_set_seed(3) == 0xF00D &&
+           vector_set_seed(-1) == 0xACE1,
+           "ctrl: vector set seed table");
+
+    close_shared_memory_fd(fd);
+    shared_memory_unlink_name(CTRL_FILENAME);
   }
 
   shared_memory_unlink();

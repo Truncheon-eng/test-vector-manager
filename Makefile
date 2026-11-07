@@ -18,8 +18,10 @@ CLIENT  := $(BIN_DIR)/client
 DESTROY := $(BIN_DIR)/destroy_shm
 AUX_OBJ := $(OBJ_DIR)/auxiliary_functions.o
 
-# POSIX shm segment used by the TVM stress infra (auxiliary.hpp: FILENAME)
-SHM_FILE := /dev/shm/tvm_shm
+# POSIX shm segments used by the TVM stress infra
+# (auxiliary.hpp: FILENAME, ctrl_packet.hpp: CTRL_FILENAME)
+SHM_FILE  := /dev/shm/tvm_shm
+CTRL_FILE := /dev/shm/tvm_ctrl
 
 # ============================================================
 # Parameters
@@ -182,14 +184,14 @@ uvm_run: uvm_build
 # ------------------------------------------------------------
 uvm_stress: uvm_build $(TVM_SERVER)
 	@echo ">>> [stress] N=$(N)"
-	@rm -f $(SHM_FILE); \
+	@rm -f $(SHM_FILE) $(CTRL_FILE); \
 	$(TVM_SERVER) $(N) > $(UVM_OUT)/tvm_server.log 2>&1 & \
 	sleep 0.3; \
 	$(UVM_BIN) +NUM_TRANSACTIONS=$(N) $(UVM_PLUSARGS) | tee $(UVM_OUT)/sim.log; \
 	wait; \
 	echo ">>> [stress] server log:"; \
 	cat $(UVM_OUT)/tvm_server.log; \
-	rm -f $(SHM_FILE); \
+	rm -f $(SHM_FILE) $(CTRL_FILE); \
 	if grep -q "Test status:     SUCCESS" $(UVM_OUT)/sim.log; then \
 		exit 0; \
 	else \
@@ -206,7 +208,7 @@ $(OBJ_DIR) $(BIN_DIR) $(UVM_OUT):
 # ------------------------------------------------------------
 clean:
 	@rm -rf $(BIN_DIR) $(OBJ_DIR) $(UVM_OUT)
-	@rm -f $(SHM_FILE)
+	@rm -f $(SHM_FILE) $(CTRL_FILE)
 
 distclean: clean
 	@rm -rf $(UVM_DIR) $(UVM_MARKER)

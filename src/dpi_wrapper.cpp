@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "auxiliary.hpp"
+#include "ctrl_packet.hpp"
 #include "packet.hpp"
 
   std::ostream& operator<<(std::ostream& out, const test_packet_t& packet) {
@@ -38,6 +39,10 @@
       channels.emplace(fd, std::move(channel));
       return raw;
     }
+
+    // Control channel (sim -> producer commands); single connection
+    int ctrl_fd = -1;
+    std::unique_ptr<ShmChannel<SIZE, ctrl_packet_t>> ctrl_channel;
   }
 
   extern "C" {
@@ -147,4 +152,60 @@
 
       return DPI_SUCCESS;
     }
-  }
+
+    // --------------------------------------------------------
+    // Control channel (sim -> producer): service commands
+    // --------------------------------------------------------
+    int dpi_ctrl_open()
+    {
+      if (ctrl_fd >= 0)
+        return ctrl_fd;
+
+      int fd = shared_memory_open_name(CTRL_FILENAME);
+      if (fd < 0)
+        return -1;
+
+      auto channel = std::make_unique<ShmChannel<SIZE, ctrl_packet_t>>(fd);
+      if (!channel->valid()) {
+        close_shared_memory_fd(fd);
+        return -1;
+      }
+
+      // In the control ring the sim is the producer
+      channel->ring()->register_producer(getpid());
+
+      ctrl_fd      = fd;
+      ctrl_channel = std::move(channel);
+      return ctrl_fd;
+    }
+
+    int dpi_ctrl_send(int fd, uint32_t cmd, uint64_t arg)
+    {
+      if (ctrl_channel == nullptr || fd != ctrl_fd)
+        return DPI_ERROR;
+
+      ctrl_packet_t pkt{};
+      pkt.cmd = cmd;
+      pkt.arg = arg;
+
+      const int w = write_burst(*ctrl_channel, &pkt, 1);
+
+      if (w < 0)
+        return DPI_ERROR;
+      if (w == 0)
+        return DPI_BUFFER_FULL;
+
+      return DPI_SUCCESS;
+    }
+
+    int dpi_ctrl_close(int fd)
+    {
+      if (fd != ctrl_fd)
+        return DPI_ERROR;
+
+      ctrl_channel.reset();  // unmaps the persistent channel
+      int rc = close_shared_memory_fd(ctrl_fd);
+      ctrl_fd = -1;
+      return rc;
+    }
+}

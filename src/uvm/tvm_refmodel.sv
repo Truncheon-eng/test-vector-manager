@@ -13,8 +13,10 @@
 class tvm_refmodel extends uvm_component;
   `uvm_component_utils(tvm_refmodel)
 
-  // Golden LFSR seed (must match the server: include/lfsr.hpp)
+  // Golden LFSR seed for vector set 0 (must match the server: include/lfsr.hpp)
   const lfsr_state_t LFSR_SEED = 16'hACE1;
+
+  tvm_config cfg;
 
   uvm_analysis_imp  #(tvm_packet, tvm_refmodel) actual_in;
   uvm_analysis_port #(tvm_packet)               expected_out;
@@ -36,12 +38,26 @@ class tvm_refmodel extends uvm_component;
 
   virtual function void build_phase(uvm_phase phase);
     super.build_phase(phase);
+
+    if (!uvm_config_db#(tvm_config)::get(this, "", "cfg", cfg))
+      `uvm_fatal("CFG_FATAL", "tvm_config not found in config_db")
+
     exp = tvm_packet::type_id::create("exp");
     reset_model();
   endfunction : build_phase
 
+  // Vector set seeds - mirror of include/ctrl_packet.hpp: vector_set_seed
+  function automatic lfsr_state_t seed_for_set(int set_id);
+    case (set_id)
+      1:       return 16'hBEEF;
+      2:       return 16'hCAFE;
+      3:       return 16'hF00D;
+      default: return LFSR_SEED;  // set 0 and fallback
+    endcase
+  endfunction : seed_for_set
+
   virtual function void reset_model();
-    lfsr_state   = LFSR_SEED;
+    lfsr_state   = seed_for_set(cfg.vector_set);
     expected_seq = 0;
   endfunction : reset_model
 
