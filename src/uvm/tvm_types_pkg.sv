@@ -17,7 +17,7 @@ package tvm_types_pkg;
     DPI_STREAM_END   = 6
   } dpi_result_e;
 
-  typedef bit [15:0]       lfsr_state_t;     // LFSR states and payloads
+  typedef bit [15:0]       tvm_payload_t;    // packet payload (traffic-specific meaning)
   typedef longint unsigned stat_counter_t;   // Simulation counters
   typedef string           report_queue_t[$]; // Report line queues
 
@@ -43,19 +43,19 @@ package tvm_types_pkg;
   );
   // Blocking burst read: waits up to timeout_us of host time for at least one
   // packet, stages up to max_count packets, actual count is returned in count
-  import "DPI-C" context function int dpi_read_burst (int            fd,
-                                                      int            timeout_us,
-                                                      int            max_count,
+  import "DPI-C" context function int dpi_read_burst (input int      fd,
+                                                      input int      timeout_us,
+                                                      input int      max_count,
                                                       output int     count
   );
   // Fetch packet idx from the staging buffer filled by dpi_read_burst
-  import "DPI-C" context function int dpi_burst_packet (int                 idx,
+  import "DPI-C" context function int dpi_burst_packet (input int             idx,
                                                         output stat_counter_t seq,
                                                         output int unsigned   data
   );
   // Control channel (sim -> producer): service commands
   import "DPI-C" context function int dpi_ctrl_open();
-  import "DPI-C" context function int dpi_ctrl_close(input int fd);
+  import "DPI-C" context function int dpi_ctrl_close(int fd);
   import "DPI-C" context function int dpi_ctrl_send(int            fd,
                                                     int            cmd,
                                                     stat_counter_t arg

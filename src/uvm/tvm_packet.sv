@@ -5,8 +5,8 @@
 // TVM stream transaction (mirrors C++ test_packet_t)
 // ============================================================
 class tvm_packet extends uvm_sequence_item;
-  stat_counter_t seq;   // sequence number assigned by the producer
-  lfsr_state_t   data;  // LFSR payload
+  stat_counter_t seq;    // sequence number assigned by the producer
+  tvm_payload_t  data;   // payload (meaning is defined by the traffic model)
 
   `uvm_object_utils_begin(tvm_packet)
     `uvm_field_int(seq,  UVM_ALL_ON | UVM_DEC)

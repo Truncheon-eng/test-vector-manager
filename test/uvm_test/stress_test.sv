@@ -19,6 +19,10 @@ class stress_test extends uvm_test;
   virtual function void build_phase(uvm_phase phase);
     super.build_phase(phase);
 
+    // Inject the test-specific golden model into the reusable env
+    // (must happen before the env builds its components)
+    tvm_refmodel::type_id::set_type_override(lfsr_refmodel::get_type());
+
     cfg = tvm_config::type_id::create("cfg");
     cfg.apply_plusargs();
     uvm_config_db#(tvm_config)::set(this, "*", "cfg", cfg);

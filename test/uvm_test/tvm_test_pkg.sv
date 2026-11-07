@@ -13,6 +13,7 @@ package tvm_test_pkg;
 
   `include "uvm_macros.svh"
 
+  `include "lfsr_refmodel.sv"
   `include "stress_test.sv"
 
 endpackage : tvm_test_pkg

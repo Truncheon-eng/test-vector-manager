@@ -5,7 +5,7 @@
 // TVM Environment: monitor -> refmodel -> scoreboard
 //
 //   tvm_monitor ──item_collected_port──> rfm.actual_in
-//          │                             (golden LFSR)
+//          │                             (golden model, factory-injected)
 //          │                                │ expected_out
 //          └──> sb.actual_in                v
 //                        │        sb.expected_fifo
