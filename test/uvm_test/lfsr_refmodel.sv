@@ -28,7 +28,8 @@ class lfsr_refmodel extends tvm_refmodel;
     super.build_phase(phase);
 
     if (!uvm_config_db#(tvm_config)::get(this, "", "cfg", cfg))
-      `uvm_fatal("CFG_FATAL", "tvm_config not found in config_db")
+      `uvm_fatal  ({get_type_name(), ".CFG_FATAL"},
+                  "tvm_config not found in config_db !")
 
     reset_model();
   endfunction : build_phase

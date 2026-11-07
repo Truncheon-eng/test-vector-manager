@@ -51,11 +51,11 @@ class tvm_env extends uvm_env;
 
   virtual function void report_phase(uvm_phase phase);
     super.report_phase(phase);
-    `uvm_info(get_type_name(),
+    `uvm_info({get_type_name(), ".MATCHED\t"},
               $sformatf("Reporting matched %0d", sb.match_count),
-              UVM_NONE)
+              UVM_HIGH)
     if (sb.sequence_errors || sb.data_errors) begin
-      `uvm_error (get_type_name(),
+      `uvm_error ({get_type_name(), ".MISMATCHES\t"},
                   $sformatf("Saw %0d sequence and %0d data mismatches",
                             sb.sequence_errors,
                             sb.data_errors))

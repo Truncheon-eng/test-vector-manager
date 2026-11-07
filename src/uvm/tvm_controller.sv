@@ -26,7 +26,8 @@ class tvm_controller extends uvm_component;
     super.build_phase(phase);
 
     if (!uvm_config_db#(tvm_config)::get(this, "", "cfg", cfg))
-      `uvm_fatal("CFG_FATAL", "tvm_config not found in config_db")
+      `uvm_fatal ({get_type_name(), ".CFG_FATAL\t"},
+                  "tvm_config not found in config_db !")
   endfunction : build_phase
 
   virtual function void start_of_simulation_phase(uvm_phase phase);
@@ -36,41 +37,45 @@ class tvm_controller extends uvm_component;
 
     ctrl_fd = dpi_ctrl_open();
     if (ctrl_fd < 0) begin
-      `uvm_warning ("CTRL_OPEN",
+      `uvm_warning ({get_type_name(), ".CTRL_OPEN\t"},
                     "Control channel unavailable - producer will use its defaults")
       return;
     end
 
     if (cfg.vector_set >= 0) begin
       status = dpi_ctrl_send(ctrl_fd, CTRL_LOAD_VECTORS, cfg.vector_set);
-      `uvm_info(get_type_name(),
+      `uvm_info({get_type_name(), ".LOAD_VECTORS\t"},
                 $sformatf("LOAD_VECTORS set=%0d status=%0d",
-                          cfg.vector_set, status),
-                UVM_LOW)
+                          cfg.vector_set,
+                          status),
+                UVM_MEDIUM)
     end
 
     // Rate must be configured BEFORE the stream starts
     if (cfg.stream_rate_pps >= 0) begin
       status = dpi_ctrl_send(ctrl_fd, CTRL_SET_RATE, cfg.stream_rate_pps);
-      `uvm_info(get_type_name(),
+      `uvm_info({get_type_name(), ".SET_RATE\t"},
                 $sformatf("SET_RATE pps=%0d status=%0d",
-                          cfg.stream_rate_pps, status),
-                UVM_LOW)
+                          cfg.stream_rate_pps,
+                          status),
+                UVM_MEDIUM)
     end
 
     status = dpi_ctrl_send(ctrl_fd, CTRL_START_STREAM, cfg.num_transactions);
-    `uvm_info(get_type_name(),
+    `uvm_info({get_type_name(), ".START_STREAM\t"},
               $sformatf("START_STREAM n=%0d status=%0d",
-                        cfg.num_transactions, status),
-              UVM_LOW)
+                        cfg.num_transactions,
+                        status),
+              UVM_MEDIUM)
   endfunction : start_of_simulation_phase
 
   // Called by the monitor when the stream is fully consumed
   virtual function void stop_stream();
     if (ctrl_fd >= 0) begin
       int status = dpi_ctrl_send(ctrl_fd, CTRL_STOP_STREAM, 0);
-      `uvm_info(get_type_name(),
-                $sformatf("STOP_STREAM status=%0d", status),
+      `uvm_info({get_type_name(), ".STOP_STREAM\t"},
+                $sformatf("STOP_STREAM status=%0d",
+                          status),
                 UVM_HIGH)
     end
   endfunction : stop_stream

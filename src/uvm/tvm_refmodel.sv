@@ -49,7 +49,7 @@ class tvm_refmodel extends uvm_component;
   // NOTE: not declared `pure virtual` on purpose - Verilator-friendly;
   // a missing factory override fails loudly at runtime instead.
   virtual function void compute_expected(tvm_packet actual, tvm_packet exp_out);
-    `uvm_fatal ("REFMODEL",
+    `uvm_fatal ({get_type_name(), ".NOT_IMPLEMENTED\t"},
                 "compute_expected() not implemented - register a factory override with a concrete reference model")
   endfunction : compute_expected
 

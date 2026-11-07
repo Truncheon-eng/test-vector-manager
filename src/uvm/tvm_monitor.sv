@@ -36,11 +36,12 @@ class tvm_monitor extends uvm_monitor;
     super.build_phase(phase);
 
     if (!uvm_config_db#(tvm_config)::get(this, "", "cfg", cfg))
-      `uvm_fatal("CFG_FATAL", "tvm_config not found in config_db")
+      `uvm_fatal ({get_type_name(), ".CFG_FATAL\t"},
+                  "tvm_config not found in config_db")
 
     tr = tvm_packet::type_id::create("tr");
 
-    `uvm_info(get_type_name(),
+    `uvm_info({get_type_name(), ".CONFIGURED\t"},
               $sformatf("Configured %s", cfg.convert2string()),
               UVM_MEDIUM)
   endfunction : build_phase
@@ -56,15 +57,15 @@ class tvm_monitor extends uvm_monitor;
     // Initialize IPC connection via DPI
     fd = dpi_shared_memory_open();
     if (fd < 0) begin
-      `uvm_fatal ("SHM_OPEN_FATAL",
+      `uvm_fatal ({get_type_name(), ".SHM_OPEN_FATAL\t"},
                   "dpi_shared_memory_open() failed. Server not running?")
       // NB: under Verilator $finish does not preempt a zero-delay loop - exit explicitly
       phase.drop_objection(this);
       return;
     end
-    `uvm_info(get_full_name(),
+    `uvm_info({get_type_name(), ".SHM_OK\t"},
               $sformatf("SHM_OK: shared memory opened, fd=%0d", fd),
-              UVM_LOW)
+              UVM_MEDIUM)
 
     // Blocking burst reads: the loop only advances when data arrives
     while (collected < cfg.num_transactions) begin
@@ -73,34 +74,37 @@ class tvm_monitor extends uvm_monitor;
       // Producer finished and the ring is drained: clean end of stream.
       // The scoreboard verdict (collected vs requested) decides pass/fail.
       if (status == DPI_STREAM_END) begin
-        `uvm_info(get_full_name(),
+        `uvm_info({get_type_name(), ".STREAM_END\t"},
                   $sformatf("STREAM_END: producer finished, collected %0d of %0d packets",
                             collected, cfg.num_transactions),
-                  UVM_LOW)
+                  UVM_MEDIUM)
         break;
       end
 
       if (status != DPI_SUCCESS) begin
         case (status)
           DPI_TIMEOUT: begin
-            `uvm_fatal ("READ_TIMEOUT",
+            `uvm_fatal ({get_type_name(), ".READ_TIMEOUT\t"},
                         $sformatf("No packets in %0dus: collected %0d of %0d. Is the server running?",
-                                  cfg.read_timeout_us, collected, cfg.num_transactions))
+                                  cfg.read_timeout_us,
+                                  collected,
+                                  cfg.num_transactions))
           end
 
           DPI_PEER_GONE: begin
-            `uvm_fatal ("PEER_GONE",
+            `uvm_fatal ({get_type_name(), ".PEER_GONE\t"},
                         $sformatf("Producer process gone: collected %0d of %0d packets",
-                                  collected, cfg.num_transactions))
+                                  collected,
+                                  cfg.num_transactions))
           end
 
           DPI_ERROR: begin
-            `uvm_fatal ("READ_FATAL",
+            `uvm_fatal ({get_type_name(), ".READ_FATAL\t"},
                         "dpi_read_burst() returned DPI_ERROR. Connection lost.")
           end
 
           default: begin
-            `uvm_fatal ("READ_FATAL",
+            `uvm_fatal ({get_type_name(), ".READ_FATAL\t"},
                         $sformatf("Unknown DPI result code: %0d", status))
           end
         endcase
@@ -113,7 +117,7 @@ class tvm_monitor extends uvm_monitor;
       for (int i = 0; (i < staged) && (collected < cfg.num_transactions); i++) begin
         status = dpi_burst_packet(i, pkt_seq, pkt_data);
         if (status != DPI_SUCCESS) begin
-          `uvm_fatal ("READ_FATAL",
+          `uvm_fatal ({get_type_name(), ".READ_FATAL\t"},
                       $sformatf("dpi_burst_packet(%0d) failed with code %0d", i, status))
           phase.drop_objection(this);
           return;
@@ -130,7 +134,7 @@ class tvm_monitor extends uvm_monitor;
     if (ctrl != null)
       ctrl.stop_stream();
 
-    `uvm_info(get_full_name(),
+    `uvm_info({get_type_name(), ".DONE\t"},
               $sformatf("DONE: collected %0d packets", collected),
               UVM_MEDIUM)
 
@@ -145,10 +149,10 @@ class tvm_monitor extends uvm_monitor;
     if (fd >= 0) begin
       rc = dpi_shared_memory_close(fd);
       if (rc != 0)
-        `uvm_warning ("SHM_CLOSE",
+        `uvm_warning ({get_type_name(), ".SHM_CLOSE\t"},
                       $sformatf("close(fd=%0d) returned %0d", fd, rc))
       else
-        `uvm_info("SHM_CLEAN",
+        `uvm_info({get_type_name(), ".SHM_CLEAN\t"},
                   $sformatf("Shared memory fd=%0d closed", fd),
                   UVM_HIGH)
       fd = -1;

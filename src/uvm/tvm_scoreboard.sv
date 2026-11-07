@@ -37,7 +37,8 @@ class tvm_scoreboard extends uvm_scoreboard;
     super.build_phase(phase);
 
     if (!uvm_config_db#(tvm_config)::get(this, "", "cfg", cfg))
-      `uvm_fatal("CFG_FATAL", "tvm_config not found in config_db")
+      `uvm_fatal({get_type_name(), ".CFG_FATAL\t"},
+                  "tvm_config not found in config_db")
   endfunction : build_phase
 
   // Observed packet from the monitor
@@ -49,7 +50,7 @@ class tvm_scoreboard extends uvm_scoreboard;
     received++;
 
     if (!expected_fifo.try_get(exp)) begin
-      `uvm_error ("SB_NO_EXPECT",
+      `uvm_error ({get_type_name(), ".SB_NO_EXPECT\t"},
                   $sformatf("No expected packet for %s",
                             actual.convert2string()))
       return;
@@ -61,7 +62,7 @@ class tvm_scoreboard extends uvm_scoreboard;
     if (!seq_ok) begin
       sequence_errors++;
       if (sequence_errors <= 10) begin
-        `uvm_error ("SEQ_ERROR",
+        `uvm_error ({get_type_name(), ".SEQ_ERROR\t"},
                     $sformatf("Expected seq=%0d, received seq=%0d",
                               exp.seq,
                               actual.seq))
@@ -71,7 +72,7 @@ class tvm_scoreboard extends uvm_scoreboard;
     if (!data_ok) begin
       data_errors++;
       if (data_errors <= 10) begin
-        `uvm_error ("DATA_ERROR",
+        `uvm_error ({get_type_name(), ".DATA_ERROR\t"},
                     $sformatf("seq=%0d: expected=0x%04X, received=0x%04X",
                               actual.seq,
                               exp.data,
@@ -87,10 +88,10 @@ class tvm_scoreboard extends uvm_scoreboard;
     end
 
     if ((received % 1000) == 0) begin
-      `uvm_info("PACKET",
+      `uvm_info({get_type_name(), ".PACKET\t"},
                 $sformatf("received=%s expected=seq:%0d data:0x%04X",
                           actual.convert2string(), exp.seq, exp.data),
-                UVM_LOW)
+                UVM_MEDIUM)
     end
   endfunction : write
 
@@ -123,9 +124,12 @@ class tvm_scoreboard extends uvm_scoreboard;
     end
 
     if (is_success)
-      `uvm_info("STRESS_RESULT", final_report, UVM_NONE)
+      `uvm_info({get_type_name(), ".STRESS_RESULT\t"},
+                final_report,
+                UVM_MEDIUM)
     else
-      `uvm_error("STRESS_RESULT", final_report)
+      `uvm_error({get_type_name(), ".STRESS_RESULT\t"},
+                final_report)
   endfunction : report_phase
 endclass : tvm_scoreboard
 
