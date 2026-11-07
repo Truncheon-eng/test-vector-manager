@@ -55,9 +55,10 @@ class tvm_env extends uvm_env;
               $sformatf("Reporting matched %0d", sb.match_count),
               UVM_NONE)
     if (sb.sequence_errors || sb.data_errors) begin
-      `uvm_error(get_type_name(),
-                 $sformatf("Saw %0d sequence and %0d data mismatches",
-                           sb.sequence_errors, sb.data_errors))
+      `uvm_error (get_type_name(),
+                  $sformatf("Saw %0d sequence and %0d data mismatches",
+                            sb.sequence_errors,
+                            sb.data_errors))
     end
   endfunction : report_phase
 endclass : tvm_env

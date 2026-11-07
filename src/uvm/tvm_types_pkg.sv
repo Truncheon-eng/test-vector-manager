@@ -49,16 +49,16 @@ package tvm_types_pkg;
                                                       output int     count
   );
   // Fetch packet idx from the staging buffer filled by dpi_read_burst
-  import "DPI-C" context function int dpi_burst_packet(int                 idx,
-                                                       output stat_counter_t seq,
-                                                       output int unsigned   data
+  import "DPI-C" context function int dpi_burst_packet (int                 idx,
+                                                        output stat_counter_t seq,
+                                                        output int unsigned   data
   );
   // Control channel (sim -> producer): service commands
   import "DPI-C" context function int dpi_ctrl_open();
   import "DPI-C" context function int dpi_ctrl_close(input int fd);
-  import "DPI-C" context function int dpi_ctrl_send (int            fd,
-                                                     int            cmd,
-                                                     stat_counter_t arg
+  import "DPI-C" context function int dpi_ctrl_send(int            fd,
+                                                    int            cmd,
+                                                    stat_counter_t arg
   );
 
 endpackage : tvm_types_pkg

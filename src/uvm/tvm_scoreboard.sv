@@ -49,8 +49,9 @@ class tvm_scoreboard extends uvm_scoreboard;
     received++;
 
     if (!expected_fifo.try_get(exp)) begin
-      `uvm_error("SB_NO_EXPECT",
-                 $sformatf("No expected packet for %s", actual.convert2string()))
+      `uvm_error ("SB_NO_EXPECT",
+                  $sformatf("No expected packet for %s",
+                            actual.convert2string()))
       return;
     end
 
@@ -60,18 +61,21 @@ class tvm_scoreboard extends uvm_scoreboard;
     if (!seq_ok) begin
       sequence_errors++;
       if (sequence_errors <= 10) begin
-        `uvm_error("SEQ_ERROR",
-                   $sformatf("Expected seq=%0d, received seq=%0d",
-                             exp.seq, actual.seq))
+        `uvm_error ("SEQ_ERROR",
+                    $sformatf("Expected seq=%0d, received seq=%0d",
+                              exp.seq,
+                              actual.seq))
       end
     end
 
     if (!data_ok) begin
       data_errors++;
       if (data_errors <= 10) begin
-        `uvm_error("DATA_ERROR",
-                   $sformatf("seq=%0d: expected=0x%04X, received=0x%04X",
-                             actual.seq, exp.data, actual.data))
+        `uvm_error ("DATA_ERROR",
+                    $sformatf("seq=%0d: expected=0x%04X, received=0x%04X",
+                              actual.seq,
+                              exp.data,
+                              actual.data))
       end
     end
 
@@ -97,9 +101,9 @@ class tvm_scoreboard extends uvm_scoreboard;
 
     super.report_phase(phase);
 
-    is_success = (received == cfg.num_transactions) &&
-                 (sequence_errors == 0) &&
-                 (data_errors == 0);
+    is_success =  (received == cfg.num_transactions) &&
+                  (sequence_errors == 0) &&
+                  (data_errors == 0);
 
     msg.push_back("========================================");
     msg.push_back("Stress test result");

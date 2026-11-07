@@ -25,8 +25,11 @@ class tvm_config extends uvm_object;
   endfunction : apply_plusargs
 
   virtual function string convert2string();
-    return $sformatf("NUM_TRANSACTIONS=%0d BURST_MAX=%0d READ_TIMEOUT_US=%0d VECTOR_SET=%0d",
-                     num_transactions, burst_max, read_timeout_us, vector_set);
+    return $sformatf ("NUM_TRANSACTIONS=%0d BURST_MAX=%0d READ_TIMEOUT_US=%0d VECTOR_SET=%0d",
+                      num_transactions,
+                      burst_max,
+                      read_timeout_us,
+                      vector_set);
   endfunction : convert2string
 endclass : tvm_config
 

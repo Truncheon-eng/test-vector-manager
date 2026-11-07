@@ -36,8 +36,8 @@ class tvm_controller extends uvm_component;
 
     ctrl_fd = dpi_ctrl_open();
     if (ctrl_fd < 0) begin
-      `uvm_warning("CTRL_OPEN",
-                   "Control channel unavailable - producer will use its defaults")
+      `uvm_warning ("CTRL_OPEN",
+                    "Control channel unavailable - producer will use its defaults")
       return;
     end
 
