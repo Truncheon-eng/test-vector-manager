@@ -1,11 +1,12 @@
 # ============================================================
 # Makefile for test-vector-manager
-#   ipc/    - shared C++ IPC library (headers + auxiliary.cpp)
-#   server/ - TVM packet producer (tvm_server.cpp)
-#   client/ - DPI bridge for the sim (dpi_wrapper.cpp)
-#   uvm/    - UVM test environment (SystemVerilog)
-#   test/   - test programs (C++ loopback self-test)
-#   demo/   - stage-1 C System V IPC demo (server/client/destroy_shm)
+#   ipc/          - shared C++ IPC library (headers + auxiliary.cpp)
+#   src/server/   - TVM packet producer (tvm_server.cpp)
+#   src/client/   - DPI bridge for the sim (dpi_wrapper.cpp)
+#   src/uvm/      - critical UVM env sources (types + env package)
+#   test/         - test programs: tvm_loopback.cpp (C++ self-test)
+#   test/uvm_test/ - test-specific UVM sources (test pkg + top)
+#   demo/         - stage-1 C System V IPC demo (server/client/destroy_shm)
 # ============================================================
 
 CC      := gcc
@@ -13,8 +14,10 @@ CXX     := g++
 
 IPC_DIR  := ipc
 INC_DIR  := ipc/include
-SRV_DIR  := server
-CLI_DIR  := client
+SRV_DIR  := src/server
+CLI_DIR  := src/client
+UVM_ENV_DIR  := src/uvm
+UVM_TEST_DIR := test/uvm_test
 DEMO_DIR := demo
 OBJ_DIR  := obj
 BIN_DIR  := bin
@@ -76,12 +79,14 @@ UVM_REPO   := https://github.com/chipsalliance/uvm-verilator.git
 UVM_MARKER := .uvm_downloaded
 
 UVM_TOP    := stress_test_top
-UVM_SV_DIR := uvm
-# Единицы компиляции в порядке зависимостей (stress_test.sv включается в пакет через `include)
-UVM_SV_SRC := $(UVM_SV_DIR)/tvm_types_pkg.sv \
-              $(UVM_SV_DIR)/tvm_test_pkg.sv \
-              $(UVM_SV_DIR)/uvm_testchamber.sv
-UVM_SV_ALL := $(wildcard $(UVM_SV_DIR)/*.sv)
+# Единицы компиляции в порядке зависимостей:
+# types -> env pkg (src/uvm) -> test pkg -> топ (test/uvm_test);
+# остальные .sv включаются в пакеты через `include
+UVM_SV_SRC := $(UVM_ENV_DIR)/tvm_types_pkg.sv \
+              $(UVM_ENV_DIR)/tvm_env_pkg.sv \
+              $(UVM_TEST_DIR)/tvm_test_pkg.sv \
+              $(UVM_TEST_DIR)/uvm_testchamber.sv
+UVM_SV_ALL := $(wildcard $(UVM_ENV_DIR)/*.sv) $(wildcard $(UVM_TEST_DIR)/*.sv)
 UVM_OUT    := uvm_out
 UVM_BIN    := $(UVM_OUT)/V$(UVM_TOP)
 
@@ -116,7 +121,8 @@ VFLAGS := \
 	-Wno-TIMESCALEMOD \
 	+define+UVM_REPORT_DISABLE_BANNER \
 	+incdir+$(UVM_DIR)/src \
-	+incdir+$(UVM_SV_DIR) \
+	+incdir+$(UVM_ENV_DIR) \
+	+incdir+$(UVM_TEST_DIR) \
 	--top-module $(UVM_TOP) \
 	--Mdir $(UVM_OUT) \
 	$(VFLAGS_LDFLAGS)

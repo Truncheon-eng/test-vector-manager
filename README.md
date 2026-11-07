@@ -107,11 +107,15 @@ make distclean   # + uvm-verilator/
 ├── ipc/                   # общая C++ IPC-библиотека
 │   ├── include/           #   заголовки (ring, channel, futex, lfsr, packet, ctrl)
 │   └── auxiliary.cpp      #   shm_open/truncate/unlink
-├── server/                # продюсер: tvm_server.cpp (LFSR-генератор пакетов)
-├── client/                # клиентская сторона: dpi_wrapper.cpp (DPI-мост для sim)
-├── uvm/                   # UVM-окружение: types/DPI-пакет, transaction, config,
-│                          #   controller, monitor, refmodel, scoreboard, env, test, топ
-├── test/                  # тестовые программы: tvm_loopback.cpp (C++ самотест IPC)
+├── src/
+│   ├── server/            # продюсер: tvm_server.cpp (LFSR-генератор пакетов)
+│   ├── client/            # клиентская сторона: dpi_wrapper.cpp (DPI-мост для sim)
+│   └── uvm/               # критичные UVM-исходники: types/DPI-пакет, transaction,
+│                          #   config, controller, monitor, refmodel, scoreboard,
+│                          #   env (пакет tvm_env_pkg)
+├── test/
+│   ├── tvm_loopback.cpp   # C++ самотест IPC-слоя
+│   └── uvm_test/          # тестовые UVM-исходники: stress_test, tvm_test_pkg, топ
 ├── demo/                  # слой 1: учебный System V IPC demo (server.c, client.c,
 │                          #   destroy_shm.c, auxiliary_functions.c, shared_memory.h)
 ├── uvm-verilator/         # UVM-библиотека (клонируется make uvm_download)
